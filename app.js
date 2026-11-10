@@ -1,4 +1,4 @@
-// TB Armering v0.7.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.8.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -264,6 +264,8 @@ function resolveTree() {
 }
 
 function renderGroups() {
+  selectedRows = new Set();
+  anchorRow = null;
   ui.groups.innerHTML = "";
   for (const n of resolveTree()) ui.groups.appendChild(buildNode(n));
 }
@@ -309,18 +311,22 @@ function buildContent(d, objs, withList) {
 
   const plist = document.createElement("div");
   plist.className = "plist";
+  const rows = []; // rader i denne listen (for Shift-utvalg)
   for (const name of withList ? [...byProduct.keys()].sort(natural) : []) {
     const po = byProduct.get(name);
     const poss = [...new Set(po.map((o) => o.pos))].sort(natural);
     const row = document.createElement("div");
     row.className = "prow";
-    row.title = "Klikk for å velge i modellen";
+    row.title = "Klikk = velg · Ctrl+klikk = legg til/fjern · Shift+klikk = velg område";
+    const entry = { el: row, objs: po, rows };
+    rows.push(entry);
     row.innerHTML =
       `<span class="swatches">${poss.slice(0, 6).map((p) => `<i class="sw" data-pos="${esc(p)}"></i>`).join("")}</span>` +
       `<span class="pname">${esc(name)}</span>` +
       `<span class="pos">pos ${esc(poss.length > 3 ? poss.slice(0, 3).join(", ") + " …" : poss.join(", "))}</span>` +
       `<span class="pcount">${po.length} stk</span>`;
-    row.addEventListener("click", () => select(po));
+    row.addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); }); // ikke marker tekst
+    row.addEventListener("click", (e) => rowClick(entry, e));
     plist.appendChild(row);
   }
   d.appendChild(plist);
@@ -332,18 +338,61 @@ function buildContent(d, objs, withList) {
 
   actions.addEventListener("click", (e) => {
     const a = e.target?.dataset?.a;
-    if (a === "select") select(objs);
+    if (a === "select") { clearRowMarks(); select(objs); }
     if (a === "isolate") isolate(objs);
     if (a === "color") colorByPos(objs, posColor).then(() => showColors(true));
   });
 }
 
-async function select(objs) {
+// ---------- flervalg i Product name-listene ----------
+// Gjelder på tvers av alle grupper: Ctrl+klikk i Vegg Nord og Vegg Sør gir ett samlet utvalg.
+let selectedRows = new Set(); // entry-objekter
+let anchorRow = null;         // utgangspunkt for Shift+klikk
+
+function rowClick(entry, e) {
+  if (e.shiftKey && anchorRow && anchorRow.rows === entry.rows) {
+    // Område i samme liste, fra forrige klikk til dette
+    const a = entry.rows.indexOf(anchorRow), b = entry.rows.indexOf(entry);
+    const [from, to] = a < b ? [a, b] : [b, a];
+    if (!(e.ctrlKey || e.metaKey)) selectedRows.clear();
+    for (let i = from; i <= to; i++) selectedRows.add(entry.rows[i]);
+  } else if (e.ctrlKey || e.metaKey) {
+    if (selectedRows.has(entry)) selectedRows.delete(entry); else selectedRows.add(entry);
+    anchorRow = entry;
+  } else {
+    selectedRows = new Set([entry]);
+    anchorRow = entry;
+  }
+  refreshRowMarks();
+  const objs = [...selectedRows].flatMap((r) => r.objs);
+  if (!objs.length) {
+    // Siste rad ble tatt bort med Ctrl+klikk: fjern bare dens objekter fra utvalget
+    safe(() => api.viewer.setSelection(toSelector(entry.objs), "remove"), "Kunne ikke oppheve utvalg");
+    setStatus("Ingen valgt.");
+    return;
+  }
+  // Zoom bare ved vanlig klikk, så visningen ikke hopper mens du bygger opp et utvalg
+  const plain = !(e.shiftKey || e.ctrlKey || e.metaKey);
+  select(objs, plain, `${selectedRows.size} poster · `);
+}
+
+function refreshRowMarks() {
+  ui.groups.querySelectorAll(".prow.sel").forEach((r) => r.classList.remove("sel"));
+  selectedRows.forEach((r) => r.el.classList.add("sel"));
+}
+
+function clearRowMarks() {
+  selectedRows = new Set();
+  anchorRow = null;
+  refreshRowMarks();
+}
+
+async function select(objs, zoom = true, prefix = "") {
   await safe(async () => {
     const sel = toSelector(objs);
     await api.viewer.setSelection(sel, "set");
-    try { await api.viewer.setCamera(sel, { animationTime: 400 }); } catch (_) { /* zoom er valgfritt */ }
-    setStatus(`${objs.length} objekter valgt.`);
+    if (zoom) { try { await api.viewer.setCamera(sel, { animationTime: 400 }); } catch (_) { /* zoom er valgfritt */ } }
+    setStatus(`${prefix}${objs.length} objekter valgt.`);
   }, "Kunne ikke velge objekter");
 }
 
@@ -610,7 +659,7 @@ async function init() {
     return;
   }
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
-  ui.selectLm.addEventListener("click", () => select(lmItems()));
+  ui.selectLm.addEventListener("click", () => { clearRowMarks(); select(lmItems()); });
   ui.stampLabels.addEventListener("click", placeLabels);
   ui.clearLabels.addEventListener("click", async () => {
     await clearLabels();

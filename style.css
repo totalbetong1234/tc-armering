@@ -56,6 +56,9 @@ summary { cursor: pointer; color: var(--blue); }
 .plist { margin: 0 0 6px 12px; border-top: 1px solid var(--border); }
 .prow { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .prow:hover { background: var(--hover); }
+.prow.sel { background: #cfe3f3; box-shadow: inset 3px 0 0 var(--blue); }
+.prow.sel .pname { font-weight: 600; }
+.prow { user-select: none; }
 .prow .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prow .pcount { color: var(--muted); font-size: 11px; }
 .prow .pos { color: var(--muted); font-size: 11px; }

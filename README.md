@@ -43,6 +43,7 @@ Regler:
 
 Når en gruppe åpnes vises all armering i gruppen per **Product name** (antall og pos.nr). Velg / Isoler / Farge finnes også på overordnede grupper (f.eks. hele Yttervegger).
 - Klikk på en rad → velger og zoomer til de objektene.
+- **Ctrl+klikk** → legg til / fjern rad (også på tvers av grupper). **Shift+klikk** → velg alle rader mellom forrige og denne i samme liste. Valgte rader markeres blått. Zoom skjer bare ved vanlig klikk.
 - **Velg** / **Isoler** – hele gruppen.
 - **Farge per pos.nr** – fargelegger gruppen etter `11 PosNr`, med fargeforklaring.
 - **Nullstill** – fjerner farger og viser alt igjen.
@@ -53,6 +54,7 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
 ## Versjoner
+- v0.8.0 – flervalg i Product name-listen (Ctrl/Shift), valgte rader markeres.
 - v0.7.0 – «Stamp label»-knapp i stedet for bryter (ingen flimring), høyde 2 m, etikett i jernets farge.
 - v0.6.0 – etiketter med Product name, én per gruppe på valgte jern.
 - v0.5.1 – Isoler bruker Trimbles «Vis bare valgte objekter».
