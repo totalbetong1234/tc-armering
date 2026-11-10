@@ -11,7 +11,7 @@
   <header>
     <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v0.6.0</span>
+    <span class="version">v0.7.0</span>
     <button id="infoBtn" class="info" title="Informasjon" aria-label="Informasjon">i</button>
   </header>
   <div id="infoBox" class="infobox" hidden>Kontakt Krister om problemer.</div>
@@ -36,17 +36,12 @@
 
   <!-- Etiketter -->
   <section class="card">
-    <div class="row">
-      <div>
-        <div class="label">Etiketter (Product name)</div>
-        <div class="hint" id="labelInfo">Velg jern i modellen</div>
-      </div>
-      <label class="switch" title="Vis etiketter på valgte jern">
-        <input type="checkbox" id="toggleLabels" disabled>
-        <span class="slider"></span>
-      </label>
+    <div class="label">Etiketter (Product name)</div>
+    <div class="hint" id="labelInfo">Velg jern i modellen, trykk «Stamp label»</div>
+    <div class="leaf-actions" style="margin:8px 0 0 0">
+      <button id="stampLabels" disabled title="Sett én etikett per Product name på valgte jern">Stamp label</button>
+      <button id="clearLabels" disabled title="Fjern etikettene panelet har satt">Fjern etiketter</button>
     </div>
-    <div class="hint">Én etikett per Product name på valgte jern. Følger utvalget mens bryteren er på.</div>
   </section>
 
   <!-- Konstruksjonsdeler -->
@@ -74,8 +69,8 @@
       <label class="field">Egenskap for posisjonsnr.
         <input id="posProps" value="11 PosNr, 100 Pos.">
       </label>
-      <label class="field">Avstand fra jern til etikett (mm)
-        <input id="labelOffset" type="number" value="1000" min="100" step="100">
+      <label class="field">Etiketthøyde over jern (mm)
+        <input id="labelOffset" type="number" value="2000" min="100" step="100">
       </label>
       <div class="hint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
     </details>

@@ -12,10 +12,11 @@ Extension for 3D-visningen i Trimble Connect (Total Betong).
 **Løpemeter (LM)** – én bryter som skjuler/viser all armering med form = LM.
 Egenskaper som sjekkes: `109 Form`, `17 Formkode`, `Form armering`.
 
-**Etiketter (Product name)** – bryter som setter én etikett per Product name på jernene du har valgt i modellen.
-- Etiketten settes på jernet nærmest midten av gruppen; streken starter midt på jernet, teksten løftes opp til høyre i visningen.
-- Følger utvalget mens bryteren er på. Av = etikettene fjernes (andre markeringer røres ikke).
-- Maks 150 etiketter. Avstand jern → tekst kan endres under Innstillinger (standard 1000 mm).
+**Etiketter (Product name)** – marker jern i modellen og trykk **Stamp label**: én etikett per Product name.
+- Etiketten settes på jernet nærmest midten av gruppen; streken starter midt på jernet, teksten løftes ca. 2 m opp (og litt til høyre) i visningen.
+- Etiketten får samme farge som jernet: pos.nr-farge hvis «Farge per pos.nr» er brukt, ellers modellens farge (brun som standard).
+- **Fjern etiketter** fjerner bare panelets etiketter (andre markeringer røres ikke).
+- Maks 150 etiketter. Høyden kan endres under Innstillinger (standard 2000 mm).
 
 **Konstruksjonsdeler** – nedtrekk basert på `10 Konstruksjonsdel`, gruppert etter **prefiks** (bokstavene foran tallet):
 
@@ -52,6 +53,7 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
 ## Versjoner
+- v0.7.0 – «Stamp label»-knapp i stedet for bryter (ingen flimring), høyde 2 m, etikett i jernets farge.
 - v0.6.0 – etiketter med Product name, én per gruppe på valgte jern.
 - v0.5.1 – Isoler bruker Trimbles «Vis bare valgte objekter».
 - v0.5.0 – Isoler rettet (skjulte alt), Comax/armeringsnett fanges opp, U → Vegg Nord, W → Innervegg, fargeforklaring fjernet, «Velg» for LM, info-knapp.

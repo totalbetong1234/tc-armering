@@ -1,4 +1,4 @@
-// TB Armering v0.6.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.7.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -47,7 +47,7 @@ const BATCH = 500;
 const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
-  toggleLabels: el("toggleLabels"), labelInfo: el("labelInfo"), labelOffset: el("labelOffset"),
+  stampLabels: el("stampLabels"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelOffset: el("labelOffset"),
   lmCount: el("lmCount"), groups: el("groups"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
@@ -60,11 +60,11 @@ let itemIndex = new Map(); // "modelId|id" -> item
 
 // Etiketter
 const LABEL_MAX = 150;                                  // tak på antall etiketter (ytelse)
-const LABEL_COLOR = { r: 0, g: 99, b: 163, a: 255 };    // Trimble-blå, godt lesbar
 let labelIds = [];      // id-er på etiketter vi har lagt ut (fjernes kun disse)
 let labelTexts = new Set();
-let labelTimer = null;
 let labelBusy = false;
+const DEFAULT_LABEL_COLOR = { r: 110, g: 60, b: 30, a: 255 }; // brun, som armering i modellen
+let appliedColors = new Map(); // "modelId|id" -> rgba satt av "Farge per pos.nr"
 let scanning = false;
 
 // ---------- hjelpere ----------
@@ -169,7 +169,8 @@ async function scan() {
 
     items = found;
     itemIndex = new Map(items.map((o) => [o.modelId + "|" + o.id, o]));
-    ui.toggleLabels.disabled = false;
+    ui.stampLabels.disabled = false;
+    ui.clearLabels.disabled = false;
     const lm = lmItems();
     ui.lmCount.textContent = `${lm.length} LM-objekter funnet (av ${total})`;
     ui.toggle.checked = false;
@@ -391,11 +392,13 @@ async function colorByPos(objs, posColor) {
       const hex = posColor.get(pos);
       const rgba = { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16), a: 255 };
       await api.viewer.setObjectState(toSelector(po), { color: rgba });
+      po.forEach((o) => appliedColors.set(o.modelId + "|" + o.id, rgba)); // etiketter bruker samme farge
     }
     // Innstøpningsgods utenfor gruppen -> lys grå
     const inGroup = new Set(objs.map((o) => o.modelId + "|" + o.id));
     const embed = embedItems().filter((o) => !inGroup.has(o.modelId + "|" + o.id));
     if (embed.length) await api.viewer.setObjectState(toSelector(embed), { color: EMBED_COLOR });
+    embed.forEach((o) => appliedColors.set(o.modelId + "|" + o.id, EMBED_COLOR));
     setStatus(`Fargelagt ${byPos.size} posisjonsnr. (${objs.length} objekter). Innstøpningsgods er lys grå.`);
   }, "Kunne ikke fargelegge");
 }
@@ -403,6 +406,7 @@ async function colorByPos(objs, posColor) {
 async function resetAll() {
   await safe(async () => {
     await api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" });
+    appliedColors = new Map();
     ui.toggle.checked = false;
     ui.groups.querySelectorAll(".sw").forEach((s) => { s.style.background = "transparent"; });
     setStatus("Farger og synlighet er nullstilt.");
@@ -418,8 +422,8 @@ function rotate(q, v) {
   return { x: v.x + 2 * (w * cx + dx), y: v.y + 2 * (w * cy + dy), z: v.z + 2 * (w * cz + dz) };
 }
 
-// Retning "opp til høyre" sett fra kameraet (enhetsvektor i modellkoordinater).
-async function upRightDirection() {
+// Kameraets "høyre" og "opp" (enhetsvektorer i modellkoordinater).
+async function cameraAxes() {
   let right = { x: 1, y: 0, z: 0 }, up = { x: 0, y: 0, z: 1 };
   try {
     const cam = await api.viewer.getCamera();
@@ -428,9 +432,16 @@ async function upRightDirection() {
       up = rotate(cam.quaternion, { x: 0, y: 1, z: 0 });
     }
   } catch (_) { /* bruk standard */ }
-  const d = { x: right.x + up.x * 1.5, y: right.y + up.y * 1.5, z: right.z + up.z * 1.5 };
-  const len = Math.hypot(d.x, d.y, d.z) || 1;
-  return { x: d.x / len, y: d.y / len, z: d.z / len };
+  const n = (v) => { const l = Math.hypot(v.x, v.y, v.z) || 1; return { x: v.x / l, y: v.y / l, z: v.z / l }; };
+  return { right: n(right), up: n(up) };
+}
+
+// "#RRGGBB", "RRGGBB" eller "#RRGGBBAA" -> rgba. Ugyldig -> null.
+function hexToRgba(hex) {
+  const m = /^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const v = parseInt(m[1], 16);
+  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255, a: 255 };
 }
 
 async function clearLabels() {
@@ -513,11 +524,15 @@ async function placeLabels() {
     }
 
     // 3) Én etikett per gruppe, på jernet nærmest gruppens midtpunkt
-    const dir = await upRightDirection();
-    const offset = Math.max(100, Number(ui.labelOffset.value) || 1000);
+    const { right, up } = await cameraAxes();
+    const H = Math.max(100, Number(ui.labelOffset.value) || 2000); // høyde i mm
+    const dir = { x: up.x * H + right.x * H * 0.5, y: up.y * H + right.y * H * 0.5, z: up.z * H + right.z * H * 0.5 };
     const names = [...groups.keys()].sort(natural);
-    const markups = [];
-    for (const name of names.slice(0, LABEL_MAX)) {
+    const shown = names.slice(0, LABEL_MAX);
+
+    // Fargen til jernet som får etiketten: pos.nr-farge hvis fargelagt, ellers modellens farge
+    const chosen = new Map(); // name -> best
+    for (const name of shown) {
       const pts = groups.get(name).map((o) => ({ o, c: centers.get(o.modelId + "|" + o.id) })).filter((p) => p.c);
       if (!pts.length) continue;
       const avg = pts.reduce((a, p) => ({ x: a.x + p.c.x / pts.length, y: a.y + p.c.y / pts.length, z: a.z + p.c.z / pts.length }), { x: 0, y: 0, z: 0 });
@@ -526,15 +541,39 @@ async function placeLabels() {
         const d = (p.c.x - avg.x) ** 2 + (p.c.y - avg.y) ** 2 + (p.c.z - avg.z) ** 2;
         if (d < bestD) { bestD = d; best = p; }
       }
+      chosen.set(name, best);
+    }
+    const modelColor = new Map(); // "modelId|id" -> rgba fra modellen
+    const need = new Map();
+    for (const b of chosen.values()) {
+      const k = b.o.modelId + "|" + b.o.id;
+      if (appliedColors.has(k)) continue;
+      if (!need.has(b.o.modelId)) need.set(b.o.modelId, []);
+      need.get(b.o.modelId).push(b.o.id);
+    }
+    for (const [modelId, ids] of need) {
+      try {
+        const props = await api.viewer.getObjectProperties(modelId, ids);
+        for (const op of props || []) {
+          const c = hexToRgba(op.color);
+          if (c) modelColor.set(modelId + "|" + op.id, c);
+        }
+      } catch (_) { /* bruk standardfarge */ }
+    }
+
+    const markups = [];
+    for (const name of shown) {
+      const best = chosen.get(name);
+      if (!best) continue;
+      const k = best.o.modelId + "|" + best.o.id;
       const s = best.c;
       markups.push({
         text: name,
-        color: LABEL_COLOR,
+        color: appliedColors.get(k) || modelColor.get(k) || DEFAULT_LABEL_COLOR,
         start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: best.o.modelId, objectId: best.o.id },
-        end: { positionX: s.x + dir.x * offset, positionY: s.y + dir.y * offset, positionZ: s.z + dir.z * offset },
+        end: { positionX: s.x + dir.x, positionY: s.y + dir.y, positionZ: s.z + dir.z },
       });
     }
-
     const added = await api.markup.addTextMarkup(markups);
     labelIds = (added || []).map((m) => m.id).filter((id) => id != null);
     labelTexts = new Set(markups.map((m) => m.text));
@@ -548,23 +587,8 @@ async function placeLabels() {
   }
 }
 
-async function toggleLabels(on) {
-  if (on) {
-    await placeLabels();
-  } else {
-    await clearLabels();
-    ui.labelInfo.textContent = "Velg jern i modellen";
-  }
-}
-
 // ---------- oppstart ----------
 function onEvent(event) {
-  // Etiketter følger utvalget når bryteren er på
-  if (/onSelectionChanged/i.test(event) && ui.toggleLabels.checked) {
-    clearTimeout(labelTimer);
-    labelTimer = setTimeout(placeLabels, 400);
-    return;
-  }
   if (/onModel/i.test(event)) {
     items = [];
     ui.toggle.checked = false;
@@ -587,7 +611,11 @@ async function init() {
   }
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
   ui.selectLm.addEventListener("click", () => select(lmItems()));
-  ui.toggleLabels.addEventListener("change", () => toggleLabels(ui.toggleLabels.checked));
+  ui.stampLabels.addEventListener("click", placeLabels);
+  ui.clearLabels.addEventListener("click", async () => {
+    await clearLabels();
+    ui.labelInfo.textContent = "Etiketter fjernet";
+  });
   ui.rescan.addEventListener("click", scan);
   ui.resetColors.addEventListener("click", resetAll);
   await scan();
