@@ -1,4 +1,4 @@
-// TB Armering v0.5.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.5.1 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -338,12 +338,31 @@ async function isolate(objs) {
   await safe(async () => {
     // Behold gruppen + innstøpningsgods; skjul alt annet (også betong).
     const keep = [...objs, ...embedItems()];
-    const keepSet = new Set(keep.map((o) => o.modelId + "|" + o.id));
-    const hide = allObjects
-      .map((m) => ({ modelId: m.modelId, objectRuntimeIds: m.ids.filter((id) => !keepSet.has(m.modelId + "|" + id)) }))
-      .filter((m) => m.objectRuntimeIds.length);
-    await api.viewer.setObjectState(toSelector(keep), { visible: true });
-    if (hide.length) await api.viewer.setObjectState({ modelObjectIds: hide }, { visible: false });
+    const sel = toSelector(keep).modelObjectIds;
+    await api.viewer.setObjectState(undefined, { visible: "reset" });
+
+    // 1) Trimbles egen "Vis bare valgte objekter"
+    let ok = false;
+    try {
+      ok = await api.viewer.isolateEntities(sel.map((m) => ({ modelId: m.modelId, entityIds: m.objectRuntimeIds })));
+    } catch (_) { ok = false; }
+
+    // 2) Reserve: skjul resten, men ikke overordnede objekter (støpeenhet, etasje …),
+    //    ellers forsvinner også armeringen som ligger under dem.
+    if (ok === false) {
+      const keepSet = new Set(keep.map((o) => o.modelId + "|" + o.id));
+      for (const m of sel) {
+        try {
+          const parents = await api.viewer.getHierarchyParents(m.modelId, m.objectRuntimeIds, undefined, true);
+          (parents || []).forEach((p) => keepSet.add(m.modelId + "|" + p.id));
+        } catch (_) { /* ingen hierarki-info */ }
+      }
+      const hide = allObjects
+        .map((mm) => ({ modelId: mm.modelId, objectRuntimeIds: mm.ids.filter((id) => !keepSet.has(mm.modelId + "|" + id)) }))
+        .filter((mm) => mm.objectRuntimeIds.length);
+      if (hide.length) await api.viewer.setObjectState({ modelObjectIds: hide }, { visible: false });
+      await api.viewer.setObjectState({ modelObjectIds: sel }, { visible: true });
+    }
     ui.toggle.checked = false;
     setStatus(`Viser ${objs.length} objekter + innstøpningsgods. Trykk «Nullstill» for å vise alt.`);
   }, "Kunne ikke isolere");
