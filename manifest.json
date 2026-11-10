@@ -1,6 +1,6 @@
 {
   "title": "TB Armering",
-  "description": "Skjul/vis armering med Form = LM (løpemeter) i 3D-visningen",
+  "description": "Armering per konstruksjonsdel: skjul LM, list Product name, farge per pos.nr",
   "url": "https://totalbetong1234.github.io/tc-armering/index.html",
   "icon": "https://totalbetong1234.github.io/tc-armering/icon.svg",
   "infoUrl": "https://totalbetong1234.github.io/tc-armering/README.md",

@@ -9,35 +9,52 @@
 </head>
 <body>
   <header>
+    <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v0.1.0</span>
+    <span class="version">v0.4.0</span>
   </header>
 
+  <!-- Løpemeter -->
   <section class="card">
     <div class="row">
       <div>
         <div class="label">Løpemeter (LM)</div>
-        <div class="hint" id="count">Ikke skannet ennå</div>
+        <div class="hint" id="lmCount">Ikke skannet ennå</div>
       </div>
       <label class="switch" title="Skjul LM-armering">
         <input type="checkbox" id="toggleLm" disabled>
         <span class="slider"></span>
       </label>
     </div>
-    <div class="hint" id="toggleText">Bryter på = LM er skjult</div>
+    <div class="hint">Bryter på = LM er skjult</div>
+  </section>
+
+  <!-- Konstruksjonsdeler -->
+  <section class="card">
+    <div class="row">
+      <div class="label">Konstruksjonsdeler</div>
+      <button class="small" id="resetColors" disabled title="Fjern farger og vis alt">Nullstill</button>
+    </div>
+    <div id="groups" class="groups"><div class="hint">Ikke skannet ennå</div></div>
   </section>
 
   <section class="card">
     <button id="rescan" disabled>Skann modellene på nytt</button>
     <details>
       <summary>Innstillinger</summary>
-      <label class="field">Egenskapsnavn
-        <input id="propName" value="109 Form">
+      <label class="field">Egenskaper for form (kommaseparert)
+        <input id="lmProps" value="109 Form, 17 Formkode, Form armering">
       </label>
       <label class="field">Verdi som skal skjules
-        <input id="propValue" value="LM">
+        <input id="lmValue" value="LM">
       </label>
-      <div class="hint">Søker i alle egenskapssett (psets) etter egenskapen over.</div>
+      <label class="field">Egenskap for konstruksjonsdel
+        <input id="delProps" value="10 Konstruksjonsdel">
+      </label>
+      <label class="field">Egenskap for posisjonsnr.
+        <input id="posProps" value="11 PosNr, 100 Pos.">
+      </label>
+      <div class="hint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
     </details>
   </section>
 

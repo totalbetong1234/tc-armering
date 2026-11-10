@@ -5,6 +5,7 @@
   --border: #e0e1e9;
   --bg: #ffffff;
   --card: #f7f8fa;
+  --hover: #e8f1f8;
 }
 * { box-sizing: border-box; }
 body {
@@ -15,8 +16,9 @@ body {
   color: var(--text);
   background: var(--bg);
 }
-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
-h1 { font-size: 16px; margin: 0; }
+header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.logo { width: 28px; height: 28px; }
+h1 { font-size: 16px; margin: 0; flex: 1; }
 .version { color: var(--muted); font-size: 11px; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 12px; margin-bottom: 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -26,6 +28,7 @@ button {
   width: 100%; padding: 8px; border: 1px solid var(--blue); border-radius: 4px;
   background: #fff; color: var(--blue); font-weight: 600; cursor: pointer;
 }
+button.small { width: auto; padding: 3px 8px; font-size: 12px; }
 button:disabled, input:disabled + .slider { opacity: .5; cursor: default; }
 details { margin-top: 10px; }
 summary { cursor: pointer; color: var(--blue); }
@@ -33,6 +36,25 @@ summary { cursor: pointer; color: var(--blue); }
 .field input { display: block; width: 100%; margin-top: 2px; padding: 5px; border: 1px solid var(--border); border-radius: 3px; }
 .status { color: var(--muted); font-size: 12px; white-space: pre-wrap; }
 .status.error { color: #da212c; }
+
+/* Gruppetre */
+.groups details { margin: 4px 0 0 0; }
+.groups details details { margin-left: 12px; }
+.groups summary { color: var(--text); font-weight: 600; padding: 3px 0; }
+.groups summary .n { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.groups .empty > summary { color: var(--muted); }
+.leaf-actions { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 6px 12px; }
+.leaf-actions button { width: auto; padding: 3px 8px; font-size: 12px; }
+.plist { margin: 0 0 6px 12px; border-top: 1px solid var(--border); }
+.prow { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.prow:hover { background: var(--hover); }
+.prow .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prow .pcount { color: var(--muted); font-size: 11px; }
+.prow .pos { color: var(--muted); font-size: 11px; }
+.swatches { display: inline-flex; gap: 2px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,.25); display: inline-block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px 12px; font-size: 11px; }
+.legend span { display: inline-flex; align-items: center; gap: 3px; }
 
 /* Bryter */
 .switch { position: relative; width: 40px; height: 22px; flex: none; }
