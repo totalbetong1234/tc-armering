@@ -1,4 +1,4 @@
-// TB Armering v0.5.1 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.6.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -47,6 +47,7 @@ const BATCH = 500;
 const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
+  toggleLabels: el("toggleLabels"), labelInfo: el("labelInfo"), labelOffset: el("labelOffset"),
   lmCount: el("lmCount"), groups: el("groups"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
@@ -55,6 +56,15 @@ const ui = {
 let api = null;
 let items = [];      // [{ modelId, id, form, del, pos, product }]
 let allObjects = []; // [{ modelId, ids: [...] }] – alle objekter i lastede modeller
+let itemIndex = new Map(); // "modelId|id" -> item
+
+// Etiketter
+const LABEL_MAX = 150;                                  // tak på antall etiketter (ytelse)
+const LABEL_COLOR = { r: 0, g: 99, b: 163, a: 255 };    // Trimble-blå, godt lesbar
+let labelIds = [];      // id-er på etiketter vi har lagt ut (fjernes kun disse)
+let labelTexts = new Set();
+let labelTimer = null;
+let labelBusy = false;
 let scanning = false;
 
 // ---------- hjelpere ----------
@@ -158,6 +168,8 @@ async function scan() {
     }
 
     items = found;
+    itemIndex = new Map(items.map((o) => [o.modelId + "|" + o.id, o]));
+    ui.toggleLabels.disabled = false;
     const lm = lmItems();
     ui.lmCount.textContent = `${lm.length} LM-objekter funnet (av ${total})`;
     ui.toggle.checked = false;
@@ -397,8 +409,162 @@ async function resetAll() {
   }, "Kunne ikke nullstille");
 }
 
+// ---------- etiketter ----------
+// Roterer vektor v med kvaternion q (kamera-orientering).
+function rotate(q, v) {
+  const { x, y, z, w } = q;
+  const cx = y * v.z - z * v.y, cy = z * v.x - x * v.z, cz = x * v.y - y * v.x;           // q × v
+  const dx = y * cz - z * cy, dy = z * cx - x * cz, dz = x * cy - y * cx;                 // q × (q × v)
+  return { x: v.x + 2 * (w * cx + dx), y: v.y + 2 * (w * cy + dy), z: v.z + 2 * (w * cz + dz) };
+}
+
+// Retning "opp til høyre" sett fra kameraet (enhetsvektor i modellkoordinater).
+async function upRightDirection() {
+  let right = { x: 1, y: 0, z: 0 }, up = { x: 0, y: 0, z: 1 };
+  try {
+    const cam = await api.viewer.getCamera();
+    if (cam && cam.quaternion) {
+      right = rotate(cam.quaternion, { x: 1, y: 0, z: 0 });
+      up = rotate(cam.quaternion, { x: 0, y: 1, z: 0 });
+    }
+  } catch (_) { /* bruk standard */ }
+  const d = { x: right.x + up.x * 1.5, y: right.y + up.y * 1.5, z: right.z + up.z * 1.5 };
+  const len = Math.hypot(d.x, d.y, d.z) || 1;
+  return { x: d.x / len, y: d.y / len, z: d.z / len };
+}
+
+async function clearLabels() {
+  try {
+    if (labelIds.length) {
+      await api.markup.removeMarkups(labelIds);
+    } else if (labelTexts.size) {
+      // Reserve: fjern tekstmarkeringer med våre tekster
+      const all = await api.markup.getTextMarkups();
+      const ids = (all || []).filter((m) => labelTexts.has(m.text) && m.id != null).map((m) => m.id);
+      if (ids.length) await api.markup.removeMarkups(ids);
+    }
+  } catch (err) { console.error(err); }
+  labelIds = [];
+  labelTexts = new Set();
+}
+
+async function placeLabels() {
+  if (labelBusy) return;
+  labelBusy = true;
+  try {
+    await clearLabels();
+    const sel = await api.viewer.getSelection();
+    const picked = (sel || []).filter((m) => m.objectRuntimeIds && m.objectRuntimeIds.length);
+    if (!picked.length) {
+      ui.labelInfo.textContent = "Velg jern i modellen";
+      return;
+    }
+
+    // 1) Grupper valgte objekter per Product name
+    const groups = new Map(); // name -> [{ modelId, id }]
+    const add = (name, modelId, id) => {
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push({ modelId, id });
+    };
+    for (const m of picked) {
+      const unknown = [];
+      for (const id of m.objectRuntimeIds) {
+        const it = itemIndex.get(m.modelId + "|" + id);
+        if (it) add(it.product, m.modelId, id); else unknown.push(id);
+      }
+      for (let i = 0; i < unknown.length; i += BATCH) {
+        const props = await api.viewer.getObjectProperties(m.modelId, unknown.slice(i, i + BATCH));
+        for (const op of props || []) {
+          if (CONCRETE.test(op.class || "")) continue;
+          let name = op.product && op.product.name;
+          if (!name) {
+            for (const ps of op.properties || []) for (const p of ps.properties || []) {
+              if (!name && normName(p.name) === "name") name = p.value;
+            }
+          }
+          if (name) add(String(name).replace(/:\d+$/, ""), m.modelId, op.id);
+        }
+      }
+    }
+    if (!groups.size) { ui.labelInfo.textContent = "Ingen armering i utvalget"; return; }
+
+    // 2) Midtpunkt for alle valgte objekter (bounding box, meter -> mm)
+    const centers = new Map(); // "modelId|id" -> {x,y,z} i mm
+    const byModel = new Map();
+    for (const objs of groups.values()) for (const o of objs) {
+      if (!byModel.has(o.modelId)) byModel.set(o.modelId, []);
+      byModel.get(o.modelId).push(o.id);
+    }
+    for (const [modelId, ids] of byModel) {
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const boxes = await api.viewer.getObjectBoundingBoxes(modelId, ids.slice(i, i + BATCH));
+        for (const b of boxes || []) {
+          const bb = b.boundingBox; if (!bb) continue;
+          // Enhet er ikke dokumentert: et jern > 50 i lengde må være mm, ellers meter.
+          const ext = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z);
+          const k = ext > 50 ? 1 : 1000;
+          centers.set(modelId + "|" + b.id, {
+            x: (bb.min.x + bb.max.x) / 2 * k,
+            y: (bb.min.y + bb.max.y) / 2 * k,
+            z: (bb.min.z + bb.max.z) / 2 * k,
+          });
+        }
+      }
+    }
+
+    // 3) Én etikett per gruppe, på jernet nærmest gruppens midtpunkt
+    const dir = await upRightDirection();
+    const offset = Math.max(100, Number(ui.labelOffset.value) || 1000);
+    const names = [...groups.keys()].sort(natural);
+    const markups = [];
+    for (const name of names.slice(0, LABEL_MAX)) {
+      const pts = groups.get(name).map((o) => ({ o, c: centers.get(o.modelId + "|" + o.id) })).filter((p) => p.c);
+      if (!pts.length) continue;
+      const avg = pts.reduce((a, p) => ({ x: a.x + p.c.x / pts.length, y: a.y + p.c.y / pts.length, z: a.z + p.c.z / pts.length }), { x: 0, y: 0, z: 0 });
+      let best = pts[0], bestD = Infinity;
+      for (const p of pts) {
+        const d = (p.c.x - avg.x) ** 2 + (p.c.y - avg.y) ** 2 + (p.c.z - avg.z) ** 2;
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      const s = best.c;
+      markups.push({
+        text: name,
+        color: LABEL_COLOR,
+        start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: best.o.modelId, objectId: best.o.id },
+        end: { positionX: s.x + dir.x * offset, positionY: s.y + dir.y * offset, positionZ: s.z + dir.z * offset },
+      });
+    }
+
+    const added = await api.markup.addTextMarkup(markups);
+    labelIds = (added || []).map((m) => m.id).filter((id) => id != null);
+    labelTexts = new Set(markups.map((m) => m.text));
+    const cut = names.length > LABEL_MAX ? ` (maks ${LABEL_MAX} vist av ${names.length})` : "";
+    ui.labelInfo.textContent = `${markups.length} etiketter${cut}`;
+  } catch (err) {
+    console.error(err);
+    setStatus("Kunne ikke lage etiketter: " + (err?.message || err), true);
+  } finally {
+    labelBusy = false;
+  }
+}
+
+async function toggleLabels(on) {
+  if (on) {
+    await placeLabels();
+  } else {
+    await clearLabels();
+    ui.labelInfo.textContent = "Velg jern i modellen";
+  }
+}
+
 // ---------- oppstart ----------
 function onEvent(event) {
+  // Etiketter følger utvalget når bryteren er på
+  if (/onSelectionChanged/i.test(event) && ui.toggleLabels.checked) {
+    clearTimeout(labelTimer);
+    labelTimer = setTimeout(placeLabels, 400);
+    return;
+  }
   if (/onModel/i.test(event)) {
     items = [];
     ui.toggle.checked = false;
@@ -421,6 +587,7 @@ async function init() {
   }
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
   ui.selectLm.addEventListener("click", () => select(lmItems()));
+  ui.toggleLabels.addEventListener("change", () => toggleLabels(ui.toggleLabels.checked));
   ui.rescan.addEventListener("click", scan);
   ui.resetColors.addEventListener("click", resetAll);
   await scan();

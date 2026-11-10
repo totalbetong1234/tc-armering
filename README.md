@@ -12,6 +12,11 @@ Extension for 3D-visningen i Trimble Connect (Total Betong).
 **Løpemeter (LM)** – én bryter som skjuler/viser all armering med form = LM.
 Egenskaper som sjekkes: `109 Form`, `17 Formkode`, `Form armering`.
 
+**Etiketter (Product name)** – bryter som setter én etikett per Product name på jernene du har valgt i modellen.
+- Etiketten settes på jernet nærmest midten av gruppen; streken starter midt på jernet, teksten løftes opp til høyre i visningen.
+- Følger utvalget mens bryteren er på. Av = etikettene fjernes (andre markeringer røres ikke).
+- Maks 150 etiketter. Avstand jern → tekst kan endres under Innstillinger (standard 1000 mm).
+
 **Konstruksjonsdeler** – nedtrekk basert på `10 Konstruksjonsdel`, gruppert etter **prefiks** (bokstavene foran tallet):
 
 | Gruppe | Prefiks | Eksempel |
@@ -47,6 +52,8 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
 ## Versjoner
+- v0.6.0 – etiketter med Product name, én per gruppe på valgte jern.
+- v0.5.1 – Isoler bruker Trimbles «Vis bare valgte objekter».
 - v0.5.0 – Isoler rettet (skjulte alt), Comax/armeringsnett fanges opp, U → Vegg Nord, W → Innervegg, fargeforklaring fjernet, «Velg» for LM, info-knapp.
 - v0.4.0 – Heis (H), Comax (Skjøtejernskassett), Annet, innstøpningsgods alltid synlig / lys grå, betong utelates fra gruppene.
 - v0.3.0 – gruppering etter prefiks (A/B, F/KR/S, K, U, YE/YN/YS/YV, V, VR), 100 = 1, «Andre» og «Uten konstruksjonsdel».
