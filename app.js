@@ -1,4 +1,4 @@
-// TB Armering v0.4.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.5.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -22,14 +22,13 @@ const GROUPS = [
   { title: "Heis", prefixes: ["H"] },
   { title: "Kran", prefixes: ["K"] },
   { title: "Yttervegger", children: [
-    { title: "Yttervegg", prefixes: ["U"] },
     { title: "Vegg Øst", prefixes: ["YE"] },
-    { title: "Vegg Nord", prefixes: ["YN"] },
+    { title: "Vegg Nord", prefixes: ["YN", "U"] },
     { title: "Vegg Sør", prefixes: ["YS"] },
     { title: "Vegg Vest", prefixes: ["YV"] },
   ]},
   { title: "Innervegger", children: [
-    { title: "Innervegg", prefixes: ["V"] },
+    { title: "Innervegg", prefixes: ["V", "W"] },
     { title: "Vegg rampe", prefixes: ["VR"] },
   ]},
 ];
@@ -47,13 +46,15 @@ const BATCH = 500;
 
 const el = (id) => document.getElementById(id);
 const ui = {
-  toggle: el("toggleLm"), lmCount: el("lmCount"), groups: el("groups"),
+  toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
+  lmCount: el("lmCount"), groups: el("groups"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
 };
 
 let api = null;
 let items = [];      // [{ modelId, id, form, del, pos, product }]
+let allObjects = []; // [{ modelId, ids: [...] }] – alle objekter i lastede modeller
 let scanning = false;
 
 // ---------- hjelpere ----------
@@ -116,6 +117,8 @@ async function scan() {
   try {
     setStatus("Henter objekter fra modellene …");
     const modelObjects = await api.viewer.getObjects();
+    // Alle objekter (også betong) – brukes av Isoler for å skjule "resten"
+    allObjects = (modelObjects || []).map((mo) => ({ modelId: mo.modelId, ids: (mo.objects || []).map((o) => o.id) }));
     const found = [];
     let total = 0;
 
@@ -136,8 +139,11 @@ async function scan() {
           const form = pick(flat, formNames);
           const del = pick(flat, delNames);
           const hasDel = delNames.some((n) => flat.has(n)); // egenskapen finnes, selv om verdien er "--"
+          const rawName = String((op.product && op.product.name) || pick(flat, productNames) || "");
+          const isRebarClass = /^IfcReinforcing|^IfcTendon/i.test(op.class || "");
           if (CONCRETE.test(op.class || "")) continue;      // betong o.l. tas ikke med
-          if (!form && !del && !hasDel) continue;           // ikke armering
+          // Armering = har form/konstruksjonsdel, er armeringsklasse, eller er Comax (har bare navn)
+          if (!form && !del && !hasDel && !isRebarClass && !COMAX.test(rawName)) continue;
           found.push({
             modelId: mo.modelId,
             id: op.id,
@@ -145,7 +151,7 @@ async function scan() {
             del,
             pos: pick(flat, posNames) || "–",
             // ":1599539" (element-id) fjernes så like produkter samles i listen
-            product: String((op.product && op.product.name) || pick(flat, productNames) || "(uten navn)").replace(/:\d+$/, ""),
+            product: (rawName || "(uten navn)").replace(/:\d+$/, ""),
           });
         }
       }
@@ -156,6 +162,7 @@ async function scan() {
     ui.lmCount.textContent = `${lm.length} LM-objekter funnet (av ${total})`;
     ui.toggle.checked = false;
     ui.toggle.disabled = lm.length === 0;
+    ui.selectLm.disabled = lm.length === 0;
     ui.resetColors.disabled = items.length === 0;
     renderGroups();
     setStatus(items.length ? "Klar." : "Fant ingen armering med de angitte egenskapene.");
@@ -276,10 +283,6 @@ function buildContent(d, objs, withList) {
   actions.innerHTML = `<button data-a="select">Velg</button><button data-a="isolate">Isoler</button><button data-a="color">Farge per pos.nr</button>`;
   d.appendChild(actions);
 
-  const legend = document.createElement("div");
-  legend.className = "legend";
-  d.appendChild(legend);
-
   // Pos.nr -> farge (stabil rekkefølge)
   const posList = [...new Set(objs.map((o) => o.pos))].sort(natural);
   const posColor = new Map(posList.map((p, i) => [p, color(i)]));
@@ -311,9 +314,6 @@ function buildContent(d, objs, withList) {
 
   const showColors = (on) => {
     plist.querySelectorAll(".sw").forEach((s) => { s.style.background = on ? posColor.get(s.dataset.pos) : "transparent"; });
-    legend.innerHTML = on
-      ? posList.map((p) => `<span><i class="sw" style="background:${posColor.get(p)}"></i>${esc(p)}</span>`).join("")
-      : "";
   };
   showColors(false);
 
@@ -336,10 +336,14 @@ async function select(objs) {
 
 async function isolate(objs) {
   await safe(async () => {
-    await api.viewer.setObjectState(undefined, { visible: false });
-    await api.viewer.setObjectState(toSelector(objs), { visible: true });
-    const embed = embedItems();
-    if (embed.length) await api.viewer.setObjectState(toSelector(embed), { visible: true });
+    // Behold gruppen + innstøpningsgods; skjul alt annet (også betong).
+    const keep = [...objs, ...embedItems()];
+    const keepSet = new Set(keep.map((o) => o.modelId + "|" + o.id));
+    const hide = allObjects
+      .map((m) => ({ modelId: m.modelId, objectRuntimeIds: m.ids.filter((id) => !keepSet.has(m.modelId + "|" + id)) }))
+      .filter((m) => m.objectRuntimeIds.length);
+    await api.viewer.setObjectState(toSelector(keep), { visible: true });
+    if (hide.length) await api.viewer.setObjectState({ modelObjectIds: hide }, { visible: false });
     ui.toggle.checked = false;
     setStatus(`Viser ${objs.length} objekter + innstøpningsgods. Trykk «Nullstill» for å vise alt.`);
   }, "Kunne ikke isolere");
@@ -370,7 +374,6 @@ async function resetAll() {
     await api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" });
     ui.toggle.checked = false;
     ui.groups.querySelectorAll(".sw").forEach((s) => { s.style.background = "transparent"; });
-    ui.groups.querySelectorAll(".legend").forEach((l) => { l.innerHTML = ""; });
     setStatus("Farger og synlighet er nullstilt.");
   }, "Kunne ikke nullstille");
 }
@@ -398,9 +401,12 @@ async function init() {
     return;
   }
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
+  ui.selectLm.addEventListener("click", () => select(lmItems()));
   ui.rescan.addEventListener("click", scan);
   ui.resetColors.addEventListener("click", resetAll);
   await scan();
 }
 
+// Info-knappen virker også om tilkoblingen feiler
+ui.infoBtn.addEventListener("click", () => { ui.infoBox.hidden = !ui.infoBox.hidden; });
 init();

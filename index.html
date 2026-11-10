@@ -11,8 +11,10 @@
   <header>
     <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v0.4.0</span>
+    <span class="version">v0.5.0</span>
+    <button id="infoBtn" class="info" title="Informasjon" aria-label="Informasjon">i</button>
   </header>
+  <div id="infoBox" class="infobox" hidden>Kontakt Krister om problemer.</div>
 
   <!-- Løpemeter -->
   <section class="card">
@@ -26,7 +28,10 @@
         <span class="slider"></span>
       </label>
     </div>
-    <div class="hint">Bryter på = LM er skjult</div>
+    <div class="row" style="margin-top:6px">
+      <div class="hint" style="margin:0">Bryter på = LM er skjult</div>
+      <button class="small" id="selectLm" disabled title="Velg all LM-armering i modellen">Velg</button>
+    </div>
   </section>
 
   <!-- Konstruksjonsdeler -->

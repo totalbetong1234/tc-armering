@@ -20,9 +20,9 @@ Egenskaper som sjekkes: `109 Form`, `17 Formkode`, `Form armering`.
 | Fundamenter | F, KR, S | F1 (+F100), KR1, S1 |
 | Heis | H | H1, H2, H3, H4 … |
 | Kran | K | K1, K2, K3 … |
-| Yttervegger → Yttervegg | U | U1 |
-| Yttervegger → Vegg Øst / Nord / Sør / Vest | YE / YN / YS / YV | YE1 (+YE100) … |
-| Innervegger → Innervegg | V | V1, V2, V5 … |
+| Yttervegger → Vegg Øst / Sør / Vest | YE / YS / YV | YE1 (+YE100) … |
+| Yttervegger → Vegg Nord | YN, U | YN1 (+YN100), U1 |
+| Innervegger → Innervegg | V, W | V1, V2, V5, W2 … |
 | Innervegger → Vegg rampe | VR | VR1 (+VR100) |
 | Comax | «--» + navn Skjøtejernskassett | innstøpningsgods |
 | Annet | øvrige prefiks + øvrig «--» | T1, armeringsnett, OS til prefabsøyle |
@@ -47,6 +47,7 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
 ## Versjoner
+- v0.5.0 – Isoler rettet (skjulte alt), Comax/armeringsnett fanges opp, U → Vegg Nord, W → Innervegg, fargeforklaring fjernet, «Velg» for LM, info-knapp.
 - v0.4.0 – Heis (H), Comax (Skjøtejernskassett), Annet, innstøpningsgods alltid synlig / lys grå, betong utelates fra gruppene.
 - v0.3.0 – gruppering etter prefiks (A/B, F/KR/S, K, U, YE/YN/YS/YV, V, VR), 100 = 1, «Andre» og «Uten konstruksjonsdel».
 - v0.2.0 – konstruksjonsdeler, Product name-liste, farge per pos.nr, nytt ikon, flere LM-egenskaper.

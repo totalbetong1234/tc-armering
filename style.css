@@ -20,6 +20,14 @@ header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .logo { width: 28px; height: 28px; border-radius: 3px; }
 h1 { font-size: 16px; margin: 0; flex: 1; }
 .version { color: var(--muted); font-size: 11px; }
+button.info {
+  width: 20px; height: 20px; padding: 0; border-radius: 50%;
+  font: italic 700 12px Georgia, serif; line-height: 18px; text-align: center; flex: none;
+}
+.infobox {
+  background: #fff8e6; border: 1px solid #f2d79b; border-radius: 4px;
+  padding: 8px 10px; margin: -4px 0 10px; font-size: 12px;
+}
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 12px; margin-bottom: 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .label { font-weight: 600; }
