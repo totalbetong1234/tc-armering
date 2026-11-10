@@ -17,7 +17,7 @@ body {
   background: var(--bg);
 }
 header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.logo { width: 28px; height: 28px; }
+.logo { width: 28px; height: 28px; border-radius: 3px; }
 h1 { font-size: 16px; margin: 0; flex: 1; }
 .version { color: var(--muted); font-size: 11px; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 12px; margin-bottom: 10px; }
