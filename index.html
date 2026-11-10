@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TB Armering</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+</head>
+<body>
+  <header>
+    <h1>TB Armering</h1>
+    <span class="version">v0.1.0</span>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <div>
+        <div class="label">Løpemeter (LM)</div>
+        <div class="hint" id="count">Ikke skannet ennå</div>
+      </div>
+      <label class="switch" title="Skjul LM-armering">
+        <input type="checkbox" id="toggleLm" disabled>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="hint" id="toggleText">Bryter på = LM er skjult</div>
+  </section>
+
+  <section class="card">
+    <button id="rescan" disabled>Skann modellene på nytt</button>
+    <details>
+      <summary>Innstillinger</summary>
+      <label class="field">Egenskapsnavn
+        <input id="propName" value="109 Form">
+      </label>
+      <label class="field">Verdi som skal skjules
+        <input id="propValue" value="LM">
+      </label>
+      <div class="hint">Søker i alle egenskapssett (psets) etter egenskapen over.</div>
+    </details>
+  </section>
+
+  <div id="status" class="status">Kobler til Trimble Connect …</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
