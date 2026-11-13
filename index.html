@@ -11,76 +11,82 @@
   <header>
     <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v0.9.0</span>
-    <button id="infoBtn" class="info" title="Informasjon" aria-label="Informasjon">i</button>
+    <span class="version">v1.0.0</span>
+    <button id="infoBtn" class="info" data-i18n-title="info" title="Informasjon" aria-label="Informasjon">i</button>
   </header>
-  <div id="infoBox" class="infobox" hidden>Kontakt Krister om problemer.</div>
+  <div class="langbar" role="group" aria-label="Språk / Language / Język">
+    <button class="lang" data-lang="no" title="Norsk">NO</button>
+    <button class="lang" data-lang="en" title="English">ENG</button>
+    <button class="lang" data-lang="pl" title="Polski">PL</button>
+  </div>
+  <div id="infoBox" class="infobox" data-i18n="info.text" hidden>Kontakt Krister om problemer.</div>
 
   <!-- Løpemeter -->
   <section class="card">
     <div class="row">
       <div>
-        <div class="label">Løpemeter (LM)</div>
+        <div class="label" data-i18n="lm.title">Løpemeter (LM)</div>
         <div class="hint" id="lmCount">Ikke skannet ennå</div>
       </div>
-      <label class="switch" title="Skjul LM-armering">
+      <label class="switch" data-i18n-title="lm.toggleTitle" title="Skjul LM-armering">
         <input type="checkbox" id="toggleLm" disabled>
         <span class="slider"></span>
       </label>
     </div>
     <div class="row" style="margin-top:6px">
-      <div class="hint" style="margin:0">Bryter på = LM er skjult</div>
-      <button class="small" id="selectLm" disabled title="Velg all LM-armering i modellen">Velg</button>
+      <div class="hint" style="margin:0" data-i18n="lm.hint">Bryter på = LM er skjult</div>
+      <button class="small" id="selectLm" disabled data-i18n="btn.select" data-i18n-title="lm.selectTitle" title="Velg all LM-armering i modellen">Velg</button>
     </div>
   </section>
 
   <!-- Etiketter -->
   <section class="card">
-    <div class="label">Etiketter (Product name)</div>
+    <div class="label" data-i18n="labels.title">Etiketter (Product name)</div>
     <div class="hint" id="labelInfo">Velg jern i modellen, trykk «Stamp label»</div>
     <div class="leaf-actions" style="margin:8px 0 0 0">
-      <button id="stampLabels" disabled title="Sett én etikett per Product name på valgte jern">Stamp label</button>
-      <button id="clearLabels" disabled title="Fjern etikettene panelet har satt">Fjern etiketter</button>
+      <button id="stampLabels" disabled data-i18n="labels.stamp" data-i18n-title="labels.stampTitle" title="Sett én etikett per Product name på valgte jern">Stamp label</button>
+      <button id="clearLabels" disabled data-i18n="labels.clear" data-i18n-title="labels.clearTitle" title="Fjern etikettene panelet har satt">Fjern etiketter</button>
     </div>
   </section>
 
   <!-- Konstruksjonsdeler -->
   <section class="card">
     <div class="row">
-      <div class="label">Konstruksjonsdeler</div>
-      <button class="small" id="resetColors" disabled title="Fjern farger og vis alt">Nullstill</button>
+      <div class="label" data-i18n="parts.title">Konstruksjonsdeler</div>
+      <button class="small" id="resetColors" disabled data-i18n="reset" data-i18n-title="resetTitle" title="Fjern farger og vis alt">Nullstill</button>
     </div>
     <div id="groups" class="groups"><div class="hint">Ikke skannet ennå</div></div>
   </section>
 
   <section class="card">
-    <button id="rescan" disabled>Skann modellene på nytt</button>
+    <button id="rescan" disabled data-i18n="rescan">Skann modellene på nytt</button>
     <details>
-      <summary>Innstillinger</summary>
-      <label class="field">Egenskaper for form (kommaseparert)
+      <summary data-i18n="settings">Innstillinger</summary>
+      <label class="field"><span data-i18n="set.lmProps">Egenskaper for form (kommaseparert)</span>
         <input id="lmProps" value="109 Form, 17 Formkode, Form armering">
       </label>
-      <label class="field">Verdi som skal skjules
+      <label class="field"><span data-i18n="set.lmValue">Verdi som skal skjules</span>
         <input id="lmValue" value="LM">
       </label>
-      <label class="field">Egenskap for konstruksjonsdel
+      <label class="field"><span data-i18n="set.delProps">Egenskap for konstruksjonsdel</span>
         <input id="delProps" value="10 Konstruksjonsdel">
       </label>
-      <label class="field">Egenskap for posisjonsnr.
+      <label class="field"><span data-i18n="set.posProps">Egenskap for posisjonsnr.</span>
         <input id="posProps" value="11 PosNr, 100 Pos.">
       </label>
-      <label class="field">Etiketthøyde over jern, laveste (mm)
+      <label class="field"><span data-i18n="set.labelMin">Etiketthøyde over jern, laveste (mm)</span>
         <input id="labelMin" type="number" value="1500" min="100" step="100">
       </label>
-      <label class="field">Etiketthøyde over jern, høyeste (mm)
+      <label class="field"><span data-i18n="set.labelMax">Etiketthøyde over jern, høyeste (mm)</span>
         <input id="labelMax" type="number" value="2400" min="100" step="100">
       </label>
-      <div class="hint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
+      <div class="hint" id="setHint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
     </details>
   </section>
 
   <div id="status" class="status">Kobler til Trimble Connect …</div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

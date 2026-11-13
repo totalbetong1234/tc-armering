@@ -1,7 +1,8 @@
-// TB Armering v0.9.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v1.0.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
+// - Språk: NO / EN / PL (tekster i i18n.js)
 // All behandling skjer i nettleseren. Ingen data sendes ut av Trimble Connect.
 
 // Gruppestruktur basert på PREFIKS i konstruksjonsdel-koden (bokstavene foran tallet).
@@ -12,24 +13,25 @@
 // - Objekter uten konstruksjonsdel ("--") = innstøpningsgods:
 //   Skjøtejernskassett -> "Comax", resten -> "Annet > Innstøpningsgods".
 //   Innstøpningsgods er alltid synlig ved Isoler og blir lys grå ved fargelegging.
+// "t" = nøkkel i i18n.js (gruppenavn oversettes).
 const COMAX = /skj.tejernskassett/i;
 const EMBED_COLOR = { r: 215, g: 218, b: 222, a: 255 }; // lys grå
 // IFC-klasser som ikke er armering (betongelementer o.l.)
 const CONCRETE = /^Ifc(Slab|Wall|WallStandardCase|Beam|Column|Footing|Stair|StairFlight|Roof|Plate|Pile|Ramp|RampFlight|Covering|Space|Opening)/i;
 const GROUPS = [
-  { title: "Bunnplate", prefixes: ["A", "B"] },
-  { title: "Fundamenter", prefixes: ["F", "KR", "S"] },
-  { title: "Heis", prefixes: ["H"] },
-  { title: "Kran", prefixes: ["K"] },
-  { title: "Yttervegger", children: [
-    { title: "Vegg Øst", prefixes: ["YE"] },
-    { title: "Vegg Nord", prefixes: ["YN", "U"] },
-    { title: "Vegg Sør", prefixes: ["YS"] },
-    { title: "Vegg Vest", prefixes: ["YV"] },
+  { t: "g.bunnplate", prefixes: ["A", "B"] },
+  { t: "g.fundamenter", prefixes: ["F", "KR", "S"] },
+  { t: "g.heis", prefixes: ["H"] },
+  { t: "g.kran", prefixes: ["K"] },
+  { t: "g.yttervegger", children: [
+    { t: "g.veggOst", prefixes: ["YE"] },
+    { t: "g.veggNord", prefixes: ["YN", "U"] },
+    { t: "g.veggSor", prefixes: ["YS"] },
+    { t: "g.veggVest", prefixes: ["YV"] },
   ]},
-  { title: "Innervegger", children: [
-    { title: "Innervegg", prefixes: ["V", "W"] },
-    { title: "Vegg rampe", prefixes: ["VR"] },
+  { t: "g.innervegger", children: [
+    { t: "g.innervegg", prefixes: ["V", "W"] },
+    { t: "g.veggRampe", prefixes: ["VR"] },
   ]},
 ];
 
@@ -48,7 +50,7 @@ const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
   stampLabels: el("stampLabels"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelMin: el("labelMin"), labelMax: el("labelMax"),
-  lmCount: el("lmCount"), groups: el("groups"),
+  lmCount: el("lmCount"), groups: el("groups"), setHint: el("setHint"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
 };
@@ -67,17 +69,56 @@ const DEFAULT_LABEL_COLOR = { r: 110, g: 60, b: 30, a: 255 }; // brun, som armer
 let appliedColors = new Map(); // "modelId|id" -> rgba satt av "Farge per pos.nr"
 let scanning = false;
 
+// ---------- språk ----------
+// Dynamiske tekster huskes som nøkkel + verdier, så de kan oversettes på nytt ved språkbytte.
+let statusState = { key: "st.connecting", params: {}, err: false, extra: "" };
+let lmState = { key: "notScanned", params: {} };
+let labelState = { key: "labels.hint", params: {} };
+let groupsState = "notScanned"; // "notScanned" | "modelsChanged" | "tree"
+
+function applyLanguage(lang) {
+  if (lang && I18N[lang]) {
+    LANG = lang;
+    try { localStorage.setItem("tba:lang", lang); } catch (_) { /* ingen lagring */ }
+  }
+  document.documentElement.lang = LANG === "no" ? "no" : LANG;
+  document.querySelectorAll("[data-i18n]").forEach((e) => { e.textContent = t(e.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-title]").forEach((e) => {
+    e.title = t(e.dataset.i18nTitle);
+    if (e.hasAttribute("aria-label")) e.setAttribute("aria-label", t(e.dataset.i18nTitle));
+  });
+  document.querySelectorAll(".langbar .lang").forEach((b) => b.classList.toggle("active", b.dataset.lang === LANG));
+  ui.setHint.textContent = t("set.hint", { btn: t("rescan") });
+  renderStatus(); renderLm(); renderLabelInfo();
+  if (groupsState === "tree") renderGroups();
+  else ui.groups.innerHTML = `<div class="hint">${esc(t(groupsState))}</div>`;
+}
+
+function setStatus(key, params = {}, err = false, extra = "") {
+  statusState = { key, params, err, extra };
+  renderStatus();
+}
+function renderStatus() {
+  const s = statusState;
+  ui.status.textContent = t(s.key, s.params) + (s.extra ? ": " + s.extra : "");
+  ui.status.classList.toggle("error", s.err);
+}
+function setLm(key, params = {}) { lmState = { key, params }; renderLm(); }
+function renderLm() { ui.lmCount.textContent = t(lmState.key, lmState.params); }
+function setLabelInfo(key, params = {}) { labelState = { key, params }; renderLabelInfo(); }
+function renderLabelInfo() {
+  const p = { ...labelState.params, btn: t("labels.stamp") };
+  let s = t(labelState.key, p);
+  if (labelState.params.cutTotal) s += t("labels.cut", { max: LABEL_MAX, total: labelState.params.cutTotal });
+  ui.labelInfo.textContent = s;
+}
+
 // ---------- hjelpere ----------
 const norm = (v) => String(v ?? "").trim().toLowerCase();
 const normName = (v) => norm(v).replace(/[\s_.\-]/g, "");
 const list = (s) => s.split(",").map(normName).filter(Boolean);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const natural = (a, b) => String(a).localeCompare(String(b), "no", { numeric: true });
-
-function setStatus(text, isError = false) {
-  ui.status.textContent = text;
-  ui.status.classList.toggle("error", isError);
-}
 
 // Første ikke-tomme verdi blant kandidatnavnene ("--" regnes som tom).
 function pick(flat, names) {
@@ -109,8 +150,9 @@ function color(i) {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-async function safe(fn, msg) {
-  try { await fn(); } catch (err) { console.error(err); setStatus(msg + ": " + (err?.message || err), true); }
+// errKey = nøkkel i i18n.js for feilmeldingen
+async function safe(fn, errKey) {
+  try { await fn(); } catch (err) { console.error(err); setStatus(errKey, {}, true, String(err?.message || err)); }
 }
 
 // ---------- skanning ----------
@@ -125,7 +167,7 @@ async function scan() {
   const productNames = ["productname", "name"];
 
   try {
-    setStatus("Henter objekter fra modellene …");
+    setStatus("st.loading");
     const modelObjects = await api.viewer.getObjects();
     // Alle objekter (også betong) – brukes av Isoler for å skjule "resten"
     allObjects = (modelObjects || []).map((mo) => ({ modelId: mo.modelId, ids: (mo.objects || []).map((o) => o.id) }));
@@ -136,7 +178,7 @@ async function scan() {
       const ids = (mo.objects || []).map((o) => o.id);
       total += ids.length;
       for (let i = 0; i < ids.length; i += BATCH) {
-        setStatus(`Leser egenskaper … ${Math.min(i + BATCH, ids.length)} / ${ids.length} objekter`);
+        setStatus("st.reading", { a: Math.min(i + BATCH, ids.length), b: ids.length });
         const props = await api.viewer.getObjectProperties(mo.modelId, ids.slice(i, i + BATCH));
         for (const op of props || []) {
           const flat = new Map();
@@ -161,7 +203,7 @@ async function scan() {
             del,
             pos: pick(flat, posNames) || "–",
             // ":1599539" (element-id) fjernes så like produkter samles i listen
-            product: (rawName || "(uten navn)").replace(/:\d+$/, ""),
+            product: (rawName || "–").replace(/:\d+$/, ""),
           });
         }
       }
@@ -172,16 +214,17 @@ async function scan() {
     ui.stampLabels.disabled = false;
     ui.clearLabels.disabled = false;
     const lm = lmItems();
-    ui.lmCount.textContent = `${lm.length} LM-objekter funnet (av ${total})`;
+    setLm("lm.count", { n: lm.length, total });
     ui.toggle.checked = false;
     ui.toggle.disabled = lm.length === 0;
     ui.selectLm.disabled = lm.length === 0;
     ui.resetColors.disabled = items.length === 0;
+    groupsState = "tree";
     renderGroups();
-    setStatus(items.length ? "Klar." : "Fant ingen armering med de angitte egenskapene.");
+    setStatus(items.length ? "st.ready" : "st.noRebar");
   } catch (err) {
     console.error(err);
-    setStatus("Feil ved skanning: " + (err?.message || err), true);
+    setStatus("err.scan", {}, true, String(err?.message || err));
   } finally {
     scanning = false;
     ui.rescan.disabled = false;
@@ -204,8 +247,8 @@ async function applyLm(hide) {
   if (!lm.length) return;
   await safe(async () => {
     await api.viewer.setObjectState(toSelector(lm), { visible: !hide });
-    setStatus(hide ? "LM er skjult." : "LM er synlig.");
-  }, "Kunne ikke endre synlighet");
+    setStatus(hide ? "lm.hidden" : "lm.visible");
+  }, "err.visibility");
 }
 
 // ---------- grupper ----------
@@ -232,20 +275,21 @@ function resolveTree() {
   const leafOf = (e, title) => ({ title, sub: rawLabel(e), objs: e.objs });
 
   const resolve = (g) => {
+    const title = t(g.t);
     if (g.children) {
       const children = g.children.map(resolve);
-      return { title: g.title, children, objs: children.flatMap((c) => c.objs) };
+      return { title, children, objs: children.flatMap((c) => c.objs) };
     }
     const pre = new Set(g.prefixes.map((p) => p.toUpperCase()));
     const fams = [...byKey.values()].filter((e) => pre.has(e.prefix)).sort((a, b) => natural(a.key, b.key));
     fams.forEach((e) => claimed.add(e.key));
-    if (fams.length === 0) return { title: g.title, sub: g.prefixes.join(", "), objs: [] };
+    if (fams.length === 0) return { title, sub: g.prefixes.join(", "), objs: [] };
     if (fams.length === 1) {
       const e = fams[0];
-      return { title: g.title, sub: [e.key, rawLabel(e)].filter(Boolean).join(" · "), objs: e.objs };
+      return { title, sub: [e.key, rawLabel(e)].filter(Boolean).join(" · "), objs: e.objs };
     }
     const children = fams.map((e) => leafOf(e, e.key));
-    return { title: g.title, children, objs: children.flatMap((c) => c.objs) };
+    return { title, children, objs: children.flatMap((c) => c.objs) };
   };
 
   const tree = GROUPS.map(resolve);
@@ -253,13 +297,13 @@ function resolveTree() {
   // Innstøpningsgods
   const comax = noDel.filter((o) => COMAX.test(o.product));
   const embedRest = noDel.filter((o) => !COMAX.test(o.product));
-  tree.push({ title: "Comax", sub: "Skjøtejernskassett", objs: comax });
+  tree.push({ title: "Comax", sub: t("g.comaxSub"), objs: comax });
 
   // Annet: ukjente koder + øvrig innstøpningsgods
   const others = [...byKey.values()].filter((e) => !claimed.has(e.key)).sort((a, b) => natural(a.key, b.key));
   const annet = others.map((e) => leafOf(e, e.key));
-  if (embedRest.length) annet.push({ title: "Innstøpningsgods", sub: "øvrig", objs: embedRest });
-  if (annet.length) tree.push({ title: "Annet", children: annet, objs: annet.flatMap((c) => c.objs) });
+  if (embedRest.length) annet.push({ title: t("g.innstopning"), sub: t("g.ovrig"), objs: embedRest });
+  if (annet.length) tree.push({ title: t("g.annet"), children: annet, objs: annet.flatMap((c) => c.objs) });
   return tree;
 }
 
@@ -289,13 +333,15 @@ function buildNode(n) {
 
 function buildContent(d, objs, withList) {
   if (!objs.length) {
-    d.insertAdjacentHTML("beforeend", `<div class="hint" style="margin-left:12px">Ingen objekter i lastede modeller.</div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="hint" style="margin-left:12px">${esc(t("noObjects"))}</div>`);
     return;
   }
 
   const actions = document.createElement("div");
   actions.className = "leaf-actions";
-  actions.innerHTML = `<button data-a="select">Velg</button><button data-a="isolate">Isoler</button><button data-a="color">Farge per pos.nr</button>`;
+  actions.innerHTML = `<button data-a="select">${esc(t("btn.select"))}</button>` +
+    `<button data-a="isolate">${esc(t("btn.isolate"))}</button>` +
+    `<button data-a="color">${esc(t("btn.color"))}</button>`;
   d.appendChild(actions);
 
   // Pos.nr -> farge (stabil rekkefølge)
@@ -317,14 +363,14 @@ function buildContent(d, objs, withList) {
     const poss = [...new Set(po.map((o) => o.pos))].sort(natural);
     const row = document.createElement("div");
     row.className = "prow";
-    row.title = "Klikk = velg · Ctrl+klikk = legg til/fjern · Shift+klikk = velg område";
+    row.title = t("row.title");
     const entry = { el: row, objs: po, rows };
     rows.push(entry);
     row.innerHTML =
       `<span class="swatches">${poss.slice(0, 6).map((p) => `<i class="sw" data-pos="${esc(p)}"></i>`).join("")}</span>` +
       `<span class="pname">${esc(name)}</span>` +
-      `<span class="pos">pos ${esc(poss.length > 3 ? poss.slice(0, 3).join(", ") + " …" : poss.join(", "))}</span>` +
-      `<span class="pcount">${po.length} stk</span>`;
+      `<span class="pos">${esc(t("row.pos"))} ${esc(poss.length > 3 ? poss.slice(0, 3).join(", ") + " …" : poss.join(", "))}</span>` +
+      `<span class="pcount">${po.length} ${esc(t("row.pcs"))}</span>`;
     row.addEventListener("mousedown", (e) => { if (e.shiftKey) e.preventDefault(); }); // ikke marker tekst
     row.addEventListener("click", (e) => rowClick(entry, e));
     plist.appendChild(row);
@@ -334,7 +380,8 @@ function buildContent(d, objs, withList) {
   const showColors = (on) => {
     plist.querySelectorAll(".sw").forEach((s) => { s.style.background = on ? posColor.get(s.dataset.pos) : "transparent"; });
   };
-  showColors(false);
+  // Vis fargene igjen hvis gruppen allerede er fargelagt (f.eks. etter språkbytte)
+  showColors(objs.some((o) => appliedColors.has(o.modelId + "|" + o.id) && appliedColors.get(o.modelId + "|" + o.id) !== EMBED_COLOR));
 
   actions.addEventListener("click", (e) => {
     const a = e.target?.dataset?.a;
@@ -367,13 +414,13 @@ function rowClick(entry, e) {
   const objs = [...selectedRows].flatMap((r) => r.objs);
   if (!objs.length) {
     // Siste rad ble tatt bort med Ctrl+klikk: fjern bare dens objekter fra utvalget
-    safe(() => api.viewer.setSelection(toSelector(entry.objs), "remove"), "Kunne ikke oppheve utvalg");
-    setStatus("Ingen valgt.");
+    safe(() => api.viewer.setSelection(toSelector(entry.objs), "remove"), "err.clearSel");
+    setStatus("st.noneSelected");
     return;
   }
   // Zoom bare ved vanlig klikk, så visningen ikke hopper mens du bygger opp et utvalg
   const plain = !(e.shiftKey || e.ctrlKey || e.metaKey);
-  select(objs, plain, `${selectedRows.size} poster · `);
+  select(objs, plain, selectedRows.size);
 }
 
 function refreshRowMarks() {
@@ -387,13 +434,14 @@ function clearRowMarks() {
   refreshRowMarks();
 }
 
-async function select(objs, zoom = true, prefix = "") {
+// rowsCount: antall valgte rader i listen (vises foran antall objekter)
+async function select(objs, zoom = true, rowsCount = 0) {
   await safe(async () => {
     const sel = toSelector(objs);
     await api.viewer.setSelection(sel, "set");
     if (zoom) { try { await api.viewer.setCamera(sel, { animationTime: 400 }); } catch (_) { /* zoom er valgfritt */ } }
-    setStatus(`${prefix}${objs.length} objekter valgt.`);
-  }, "Kunne ikke velge objekter");
+    setStatus("st.selected", { n: objs.length, prefix: rowsCount ? t("st.rowsPrefix", { n: rowsCount }) : "" });
+  }, "err.select");
 }
 
 async function isolate(objs) {
@@ -426,8 +474,8 @@ async function isolate(objs) {
       await api.viewer.setObjectState({ modelObjectIds: sel }, { visible: true });
     }
     ui.toggle.checked = false;
-    setStatus(`Viser ${objs.length} objekter + innstøpningsgods. Trykk «Nullstill» for å vise alt.`);
-  }, "Kunne ikke isolere");
+    setStatus("st.isolated", { n: objs.length, btn: t("reset") });
+  }, "err.isolate");
 }
 
 async function colorByPos(objs, posColor) {
@@ -448,8 +496,8 @@ async function colorByPos(objs, posColor) {
     const embed = embedItems().filter((o) => !inGroup.has(o.modelId + "|" + o.id));
     if (embed.length) await api.viewer.setObjectState(toSelector(embed), { color: EMBED_COLOR });
     embed.forEach((o) => appliedColors.set(o.modelId + "|" + o.id, EMBED_COLOR));
-    setStatus(`Fargelagt ${byPos.size} posisjonsnr. (${objs.length} objekter). Innstøpningsgods er lys grå.`);
-  }, "Kunne ikke fargelegge");
+    setStatus("st.colored", { p: byPos.size, n: objs.length });
+  }, "err.color");
 }
 
 async function resetAll() {
@@ -458,8 +506,8 @@ async function resetAll() {
     appliedColors = new Map();
     ui.toggle.checked = false;
     ui.groups.querySelectorAll(".sw").forEach((s) => { s.style.background = "transparent"; });
-    setStatus("Farger og synlighet er nullstilt.");
-  }, "Kunne ikke nullstille");
+    setStatus("st.reset");
+  }, "err.reset");
 }
 
 // ---------- etiketter ----------
@@ -516,7 +564,7 @@ async function placeLabels() {
     const sel = await api.viewer.getSelection();
     const picked = (sel || []).filter((m) => m.objectRuntimeIds && m.objectRuntimeIds.length);
     if (!picked.length) {
-      ui.labelInfo.textContent = "Velg jern i modellen";
+      setLabelInfo("labels.selectFirst");
       return;
     }
 
@@ -546,7 +594,7 @@ async function placeLabels() {
         }
       }
     }
-    if (!groups.size) { ui.labelInfo.textContent = "Ingen armering i utvalget"; return; }
+    if (!groups.size) { setLabelInfo("labels.noRebar"); return; }
 
     // 2) Midtpunkt for alle valgte objekter (bounding box, meter -> mm)
     const centers = new Map(); // "modelId|id" -> {x,y,z} i mm
@@ -618,9 +666,9 @@ async function placeLabels() {
       if (!c.min) return { x: c.x, y: c.y, z: c.z };
       const ex = { x: c.max.x - c.min.x, y: c.max.y - c.min.y, z: c.max.z - c.min.z };
       const ax = ex.x >= ex.y && ex.x >= ex.z ? "x" : ex.y >= ex.z ? "y" : "z";
-      const t = 0.2 + Math.random() * 0.6;
+      const tt = 0.2 + Math.random() * 0.6;
       const p = { x: c.x, y: c.y, z: c.z };
-      p[ax] = c.min[ax] + t * ex[ax];
+      p[ax] = c.min[ax] + tt * ex[ax];
       return p;
     };
     const placed = [];
@@ -662,11 +710,10 @@ async function placeLabels() {
     const added = await api.markup.addTextMarkup(markups);
     labelIds = (added || []).map((m) => m.id).filter((id) => id != null);
     labelTexts = new Set(markups.map((m) => m.text));
-    const cut = names.length > LABEL_MAX ? ` (maks ${LABEL_MAX} vist av ${names.length})` : "";
-    ui.labelInfo.textContent = `${markups.length} etiketter${cut}`;
+    setLabelInfo("labels.count", { n: markups.length, cutTotal: names.length > LABEL_MAX ? names.length : 0 });
   } catch (err) {
     console.error(err);
-    setStatus("Kunne ikke lage etiketter: " + (err?.message || err), true);
+    setStatus("err.labels", {}, true, String(err?.message || err));
   } finally {
     labelBusy = false;
   }
@@ -678,20 +725,21 @@ function onEvent(event) {
     items = [];
     ui.toggle.checked = false;
     ui.toggle.disabled = true;
-    ui.lmCount.textContent = "Modellene er endret – skann på nytt";
-    ui.groups.innerHTML = `<div class="hint">Modellene er endret – skann på nytt</div>`;
+    setLm("modelsChanged");
+    groupsState = "modelsChanged";
+    ui.groups.innerHTML = `<div class="hint">${esc(t("modelsChanged"))}</div>`;
   }
 }
 
 async function init() {
   if (typeof TrimbleConnectWorkspace === "undefined") {
-    setStatus("Fant ikke Trimble Connect Workspace API. Åpne panelet inne i Trimble Connect.", true);
+    setStatus("st.noApi", {}, true);
     return;
   }
   try {
     api = await TrimbleConnectWorkspace.connect(window.parent, onEvent, 30000);
   } catch (err) {
-    setStatus("Fikk ikke kontakt med Trimble Connect. Åpne extensionen fra 3D-visningen.", true);
+    setStatus("st.noConnect", {}, true);
     return;
   }
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
@@ -699,13 +747,15 @@ async function init() {
   ui.stampLabels.addEventListener("click", placeLabels);
   ui.clearLabels.addEventListener("click", async () => {
     await clearLabels();
-    ui.labelInfo.textContent = "Etiketter fjernet";
+    setLabelInfo("labels.removed");
   });
   ui.rescan.addEventListener("click", scan);
   ui.resetColors.addEventListener("click", resetAll);
   await scan();
 }
 
-// Info-knappen virker også om tilkoblingen feiler
+// Info- og språkknapper virker også om tilkoblingen feiler
 ui.infoBtn.addEventListener("click", () => { ui.infoBox.hidden = !ui.infoBox.hidden; });
+document.querySelectorAll(".langbar .lang").forEach((b) => b.addEventListener("click", () => applyLanguage(b.dataset.lang)));
+applyLanguage();
 init();

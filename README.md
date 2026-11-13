@@ -54,7 +54,12 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 ## Data
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
+## Språk
+Knappene **NO / ENG / PL** øverst bytter språk på alle tekster i panelet (knapper, gruppenavn, hjelpetekster og meldinger). Valget huskes i nettleseren.
+Data fra modellen (Product name, koder som YE1/B100, pos.nr, egenskapsnavn) oversettes ikke. Tekstene ligger i `i18n.js` – rett eller legg til språk der.
+
 ## Versjoner
+- v1.0.0 – språkvalg NO / ENG / PL (ny fil `i18n.js`).
 - v0.9.0 – etiketter spres: trinnvise høyder (standard 1,5–2,4 m, naboer får ulike nivåer), startpunkt tilfeldig mellom 1/5 og 4/5 av jernet, mørkere tekstfarge for bedre kontrast.
 - v0.8.0 – flervalg i Product name-listen (Ctrl/Shift), valgte rader markeres.
 - v0.7.0 – «Stamp label»-knapp i stedet for bryter (ingen flimring), høyde 2 m, etikett i jernets farge.

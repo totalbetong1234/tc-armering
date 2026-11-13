@@ -20,6 +20,9 @@ header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .logo { width: 28px; height: 28px; border-radius: 3px; }
 h1 { font-size: 16px; margin: 0; flex: 1; }
 .version { color: var(--muted); font-size: 11px; }
+.langbar { display: flex; gap: 4px; justify-content: flex-end; margin: -6px 0 10px; }
+.langbar button.lang { width: auto; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 3px; }
+.langbar button.lang.active { background: var(--blue); color: #fff; }
 button.info {
   width: 20px; height: 20px; padding: 0; border-radius: 50%;
   font: italic 700 12px Georgia, serif; line-height: 18px; text-align: center; flex: none;
