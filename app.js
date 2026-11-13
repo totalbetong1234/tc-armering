@@ -1,4 +1,4 @@
-// TB Armering v0.8.0 – Trimble Connect 3D-viewer extension (Total Betong)
+// TB Armering v0.9.0 – Trimble Connect 3D-viewer extension (Total Betong)
 // - Skjul/vis LM (løpemeter)
 // - Konstruksjonsdeler i nedtrekk, med liste over Product name
 // - Fargelegging per posisjonsnr.
@@ -47,7 +47,7 @@ const BATCH = 500;
 const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
-  stampLabels: el("stampLabels"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelOffset: el("labelOffset"),
+  stampLabels: el("stampLabels"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelMin: el("labelMin"), labelMax: el("labelMax"),
   lmCount: el("lmCount"), groups: el("groups"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
@@ -567,6 +567,8 @@ async function placeLabels() {
             x: (bb.min.x + bb.max.x) / 2 * k,
             y: (bb.min.y + bb.max.y) / 2 * k,
             z: (bb.min.z + bb.max.z) / 2 * k,
+            min: { x: bb.min.x * k, y: bb.min.y * k, z: bb.min.z * k },
+            max: { x: bb.max.x * k, y: bb.max.y * k, z: bb.max.z * k },
           });
         }
       }
@@ -574,8 +576,9 @@ async function placeLabels() {
 
     // 3) Én etikett per gruppe, på jernet nærmest gruppens midtpunkt
     const { right, up } = await cameraAxes();
-    const H = Math.max(100, Number(ui.labelOffset.value) || 2000); // høyde i mm
-    const dir = { x: up.x * H + right.x * H * 0.5, y: up.y * H + right.y * H * 0.5, z: up.z * H + right.z * H * 0.5 };
+    let hMin = Math.max(100, Number(ui.labelMin.value) || 1500); // mm
+    let hMax = Math.max(100, Number(ui.labelMax.value) || 2400);
+    if (hMax < hMin) [hMin, hMax] = [hMax, hMin];
     const names = [...groups.keys()].sort(natural);
     const shown = names.slice(0, LABEL_MAX);
 
@@ -610,17 +613,50 @@ async function placeLabels() {
       } catch (_) { /* bruk standardfarge */ }
     }
 
-    const markups = [];
+    // Startpunkt: tilfeldig mellom 1/5 og 4/5 langs jernets lengste retning (ikke alltid midten)
+    const anchorOf = (c) => {
+      if (!c.min) return { x: c.x, y: c.y, z: c.z };
+      const ex = { x: c.max.x - c.min.x, y: c.max.y - c.min.y, z: c.max.z - c.min.z };
+      const ax = ex.x >= ex.y && ex.x >= ex.z ? "x" : ex.y >= ex.z ? "y" : "z";
+      const t = 0.2 + Math.random() * 0.6;
+      const p = { x: c.x, y: c.y, z: c.z };
+      p[ax] = c.min[ax] + t * ex[ax];
+      return p;
+    };
+    const placed = [];
     for (const name of shown) {
       const best = chosen.get(name);
-      if (!best) continue;
+      if (best) placed.push({ name, best, s: anchorOf(best.c) });
+    }
+
+    // Høyder: sorter fra venstre mot høyre i visningen og gi naboer ulike nivåer (trinn 0,2,1,3 …)
+    const LEVELS = 4;
+    const order = [0, 2, 1, 3];
+    const dot = (p) => p.x * right.x + p.y * right.y + p.z * right.z;
+    placed.sort((a, b) => dot(a.s) - dot(b.s));
+    placed.forEach((p, i) => {
+      const lvl = order[i % LEVELS];
+      const jitter = (Math.random() - 0.5) * 80; // ±40 mm, så like nivåer ikke står helt på linje
+      p.h = hMin + (hMax - hMin) * (lvl / (LEVELS - 1)) + jitter;
+    });
+
+    // Mørkere variant av fargen gir bedre kontrast mot lys bakgrunn
+    const darken = (c, f = 0.7) => ({ r: Math.round(c.r * f), g: Math.round(c.g * f), b: Math.round(c.b * f), a: 255 });
+
+    const markups = [];
+    for (const { name, best, s, h } of placed) {
       const k = best.o.modelId + "|" + best.o.id;
-      const s = best.c;
+      const base = appliedColors.get(k) || modelColor.get(k) || DEFAULT_LABEL_COLOR;
+      const side = h * 0.3; // litt til høyre
       markups.push({
         text: name,
-        color: appliedColors.get(k) || modelColor.get(k) || DEFAULT_LABEL_COLOR,
+        color: darken(base),
         start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: best.o.modelId, objectId: best.o.id },
-        end: { positionX: s.x + dir.x, positionY: s.y + dir.y, positionZ: s.z + dir.z },
+        end: {
+          positionX: s.x + up.x * h + right.x * side,
+          positionY: s.y + up.y * h + right.y * side,
+          positionZ: s.z + up.z * h + right.z * side,
+        },
       });
     }
     const added = await api.markup.addTextMarkup(markups);

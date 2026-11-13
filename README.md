@@ -13,10 +13,11 @@ Extension for 3D-visningen i Trimble Connect (Total Betong).
 Egenskaper som sjekkes: `109 Form`, `17 Formkode`, `Form armering`.
 
 **Etiketter (Product name)** – marker jern i modellen og trykk **Stamp label**: én etikett per Product name.
-- Etiketten settes på jernet nærmest midten av gruppen; streken starter midt på jernet, teksten løftes ca. 2 m opp (og litt til høyre) i visningen.
+- Etiketten settes på jernet nærmest midten av gruppen; streken starter et tilfeldig sted mellom 1/5 og 4/5 av jernet, teksten løftes 1,5–2,4 m opp (og litt til høyre). Etikettene sorteres fra venstre mot høyre i visningen, og naboer får ulike høyder så de ikke dekker hverandre.
+- Teksten får en mørkere variant av jernets farge for bedre lesbarhet. (Trimble har ingen tekstboks/bakgrunn for markeringer.)
 - Etiketten får samme farge som jernet: pos.nr-farge hvis «Farge per pos.nr» er brukt, ellers modellens farge (brun som standard).
 - **Fjern etiketter** fjerner bare panelets etiketter (andre markeringer røres ikke).
-- Maks 150 etiketter. Høyden kan endres under Innstillinger (standard 2000 mm).
+- Maks 150 etiketter. Laveste og høyeste etiketthøyde kan endres under Innstillinger (standard 1500 og 2400 mm).
 
 **Konstruksjonsdeler** – nedtrekk basert på `10 Konstruksjonsdel`, gruppert etter **prefiks** (bokstavene foran tallet):
 
@@ -54,6 +55,7 @@ Egenskapsnavn kan endres under **Innstillinger**. Gruppene endres i toppen av `a
 All behandling skjer i nettleseren via Trimble Connect Workspace API. Ingen data sendes til andre servere.
 
 ## Versjoner
+- v0.9.0 – etiketter spres: trinnvise høyder (standard 1,5–2,4 m, naboer får ulike nivåer), startpunkt tilfeldig mellom 1/5 og 4/5 av jernet, mørkere tekstfarge for bedre kontrast.
 - v0.8.0 – flervalg i Product name-listen (Ctrl/Shift), valgte rader markeres.
 - v0.7.0 – «Stamp label»-knapp i stedet for bryter (ingen flimring), høyde 2 m, etikett i jernets farge.
 - v0.6.0 – etiketter med Product name, én per gruppe på valgte jern.

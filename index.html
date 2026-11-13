@@ -11,7 +11,7 @@
   <header>
     <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v0.8.0</span>
+    <span class="version">v0.9.0</span>
     <button id="infoBtn" class="info" title="Informasjon" aria-label="Informasjon">i</button>
   </header>
   <div id="infoBox" class="infobox" hidden>Kontakt Krister om problemer.</div>
@@ -69,8 +69,11 @@
       <label class="field">Egenskap for posisjonsnr.
         <input id="posProps" value="11 PosNr, 100 Pos.">
       </label>
-      <label class="field">Etiketthøyde over jern (mm)
-        <input id="labelOffset" type="number" value="2000" min="100" step="100">
+      <label class="field">Etiketthøyde over jern, laveste (mm)
+        <input id="labelMin" type="number" value="1500" min="100" step="100">
+      </label>
+      <label class="field">Etiketthøyde over jern, høyeste (mm)
+        <input id="labelMax" type="number" value="2400" min="100" step="100">
       </label>
       <div class="hint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
     </details>
