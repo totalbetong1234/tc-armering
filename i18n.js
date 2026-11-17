@@ -49,8 +49,7 @@ const I18N = {
     "set.lmValue": "Verdi som skal skjules",
     "set.delProps": "Egenskap for konstruksjonsdel",
     "set.posProps": "Egenskap for posisjonsnr.",
-    "set.labelMin": "Etiketthøyde over jern, laveste (mm)",
-    "set.labelMax": "Etiketthøyde over jern, høyeste (mm)",
+    "set.labelDist": "Avstand fra jern til etikett, 45° opp mot høyre (mm)",
     "set.hint": "Søker i alle egenskapssett. Trykk «{btn}» etter endring.",
 
     "btn.select": "Velg",
@@ -147,8 +146,7 @@ const I18N = {
     "set.lmValue": "Value to hide",
     "set.delProps": "Structural part property",
     "set.posProps": "Position number property",
-    "set.labelMin": "Label height above bar, lowest (mm)",
-    "set.labelMax": "Label height above bar, highest (mm)",
+    "set.labelDist": "Distance from bar to label, 45° up to the right (mm)",
     "set.hint": "Searches all property sets. Press “{btn}” after changes.",
 
     "btn.select": "Select",
@@ -245,8 +243,7 @@ const I18N = {
     "set.lmValue": "Wartość do ukrycia",
     "set.delProps": "Właściwość elementu konstrukcyjnego",
     "set.posProps": "Właściwość numeru pozycji",
-    "set.labelMin": "Wysokość etykiety nad prętem, najniższa (mm)",
-    "set.labelMax": "Wysokość etykiety nad prętem, najwyższa (mm)",
+    "set.labelDist": "Odległość od pręta do etykiety, 45° w górę w prawo (mm)",
     "set.hint": "Przeszukuje wszystkie zestawy właściwości. Po zmianie naciśnij „{btn}”.",
 
     "btn.select": "Zaznacz",

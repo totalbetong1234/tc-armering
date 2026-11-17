@@ -49,7 +49,7 @@ const BATCH = 500;
 const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
-  stampLabels: el("stampLabels"), stampPick: el("stampPick"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelMin: el("labelMin"), labelMax: el("labelMax"),
+  stampLabels: el("stampLabels"), stampPick: el("stampPick"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelDist: el("labelDist"),
   lmCount: el("lmCount"), groups: el("groups"), setHint: el("setHint"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
@@ -553,24 +553,17 @@ async function boxOf(modelId, id) {
   } catch (_) { return null; }
 }
 
-// Startpunkt på boksens kant i stedet for midten (v1.1.0).
-// Midten av boksen ligger i lufta for bøyde jern (L, U) og for poster med mange jern som ett objekt.
-// Stålet ligger alltid inntil boksens sider: punktet legges tilfeldig mellom 1/5 og 4/5 langs lengste akse,
-// og på den av boksens langsgående kanter som vender mot kameraet. Tynn akse (< 100 mm) beholdes i midten.
-function edgeAnchor(c, fwd) {
-  if (!c.min) return { x: c.x, y: c.y, z: c.z };
-  const ex = { x: c.max.x - c.min.x, y: c.max.y - c.min.y, z: c.max.z - c.min.z };
-  const [L, A, B] = ["x", "y", "z"].sort((a, b) => ex[b] - ex[a]);
-  const p = { x: c.x, y: c.y, z: c.z };
-  p[L] = c.min[L] + (0.2 + Math.random() * 0.6) * ex[L];
-  const opts = (ax) => (ex[ax] < 100 ? [c[ax]] : [c.min[ax], c.max[ax]]);
-  let best = p, bestS = -Infinity;
-  for (const a of opts(A)) for (const b of opts(B)) {
-    const q = { ...p, [A]: a, [B]: b };
-    const s = -((q.x - c.x) * fwd.x + (q.y - c.y) * fwd.y + (q.z - c.z) * fwd.z); // størst = nærmest kameraet
-    if (s > bestS) { bestS = s; best = q; }
-  }
-  return best;
+// Avstand fra jern til tekst (mm), fra Innstillinger. Standard 2 500 mm.
+function labelDist() { return Math.max(100, Number(ui.labelDist.value) || 2500); }
+
+// Tekstens posisjon: avstand d ut fra startpunktet, 45° opp mot høyre i visningen
+function labelEnd(s, right, up, d) {
+  const f = d / Math.SQRT2;
+  return {
+    positionX: s.x + (up.x + right.x) * f,
+    positionY: s.y + (up.y + right.y) * f,
+    positionZ: s.z + (up.z + right.z) * f,
+  };
 }
 
 // "#RRGGBB", "RRGGBB" eller "#RRGGBBAA" -> rgba. Ugyldig -> null.
@@ -664,10 +657,8 @@ async function placeLabels() {
     }
 
     // 3) Én etikett per gruppe, på jernet nærmest gruppens midtpunkt
-    const { right, up, fwd } = await cameraAxes();
-    let hMin = Math.max(100, Number(ui.labelMin.value) || 1500); // mm
-    let hMax = Math.max(100, Number(ui.labelMax.value) || 2400);
-    if (hMax < hMin) [hMin, hMax] = [hMax, hMin];
+    const { right, up } = await cameraAxes();
+    const dist = labelDist();
     const names = [...groups.keys()].sort(natural);
     const shown = names.slice(0, LABEL_MAX);
 
@@ -702,38 +693,21 @@ async function placeLabels() {
       } catch (_) { /* bruk standardfarge */ }
     }
 
-    // Startpunkt: på boksens kant mot kameraet, tilfeldig mellom 1/5 og 4/5 langs lengste retning
-    const placed = [];
+    // v1.2.0: startpunkt = midtpunktet på jernet (boksens senter). For ett rett jern ligger det alltid på stålet,
+    // også når jernet ligger på skrå. Teksten settes fast avstand ut, 45° opp mot høyre i visningen.
+    // Teksten kan flyttes manuelt i Trimble etterpå.
+    const markups = [];
     for (const name of shown) {
       const best = chosen.get(name);
-      if (best) placed.push({ name, best, s: edgeAnchor(best.c, fwd) });
-    }
-
-    // Høyder: sorter fra venstre mot høyre i visningen og gi naboer ulike nivåer (trinn 0,2,1,3 …)
-    const LEVELS = 4;
-    const order = [0, 2, 1, 3];
-    const dot = (p) => p.x * right.x + p.y * right.y + p.z * right.z;
-    placed.sort((a, b) => dot(a.s) - dot(b.s));
-    placed.forEach((p, i) => {
-      const lvl = order[i % LEVELS];
-      const jitter = (Math.random() - 0.5) * 80; // ±40 mm, så like nivåer ikke står helt på linje
-      p.h = hMin + (hMax - hMin) * (lvl / (LEVELS - 1)) + jitter;
-    });
-
-    const markups = [];
-    for (const { name, best, s, h } of placed) {
+      if (!best) continue;
+      const s = { x: best.c.x, y: best.c.y, z: best.c.z };
       const k = best.o.modelId + "|" + best.o.id;
       const base = appliedColors.get(k) || modelColor.get(k) || DEFAULT_LABEL_COLOR;
-      const side = h * 0.3; // litt til høyre
       markups.push({
         text: name,
         color: darken(base),
         start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: best.o.modelId, objectId: best.o.id },
-        end: {
-          positionX: s.x + up.x * h + right.x * side,
-          positionY: s.y + up.y * h + right.y * side,
-          positionZ: s.z + up.z * h + right.z * side,
-        },
+        end: labelEnd(s, right, up, dist),
       });
     }
     const added = await api.markup.addTextMarkup(markups);
@@ -847,16 +821,11 @@ async function onPicked(args) {
       labelIds = labelIds.filter((x) => x !== old);
     }
     const { right, up } = await cameraAxes();
-    let hMin = Math.max(100, Number(ui.labelMin.value) || 1500);
-    let hMax = Math.max(100, Number(ui.labelMax.value) || 2400);
-    if (hMax < hMin) [hMin, hMax] = [hMax, hMin];
-    const h = hMin + Math.random() * (hMax - hMin);
-    const side = h * 0.3;
     const added = await api.markup.addTextMarkup([{
       text: name,
       color: darken(await labelColor(p.modelId, p.id)),
       start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: p.modelId, objectId: p.id },
-      end: { positionX: s.x + up.x * h + right.x * side, positionY: s.y + up.y * h + right.y * side, positionZ: s.z + up.z * h + right.z * side },
+      end: labelEnd(s, right, up, labelDist()),
     }]);
     const id = added && added[0] && added[0].id;
     if (id != null) { labelIds.push(id); pickLabels.set(pk, id); }

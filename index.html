@@ -11,7 +11,7 @@
   <header>
     <img src="icon.svg" alt="" class="logo">
     <h1>TB Armering</h1>
-    <span class="version">v1.1.1</span>
+    <span class="version">v1.2.0</span>
     <button id="infoBtn" class="info" data-i18n-title="info" title="Informasjon" aria-label="Informasjon">i</button>
   </header>
   <div class="langbar" role="group" aria-label="Språk / Language / Język">
@@ -75,11 +75,8 @@
       <label class="field"><span data-i18n="set.posProps">Egenskap for posisjonsnr.</span>
         <input id="posProps" value="11 PosNr, 100 Pos.">
       </label>
-      <label class="field"><span data-i18n="set.labelMin">Etiketthøyde over jern, laveste (mm)</span>
-        <input id="labelMin" type="number" value="1500" min="100" step="100">
-      </label>
-      <label class="field"><span data-i18n="set.labelMax">Etiketthøyde over jern, høyeste (mm)</span>
-        <input id="labelMax" type="number" value="2400" min="100" step="100">
+      <label class="field"><span data-i18n="set.labelDist">Avstand fra jern til etikett, 45° opp mot høyre (mm)</span>
+        <input id="labelDist" type="number" value="2500" min="100" step="100">
       </label>
       <div class="hint" id="setHint">Søker i alle egenskapssett. Trykk «Skann på nytt» etter endring.</div>
     </details>
