@@ -750,9 +750,10 @@ async function placeLabels() {
 
 // ---------- etikett ved klikk (v1.1.0) ----------
 // Knappen «Stamp ved klikk» slår på klikk-modus. Hvert klikk på et jern gir én etikett,
-// festet nøyaktig i punktet du traff. Klikker du på samme post igjen, flyttes etiketten.
+// festet nøyaktig i punktet du traff. Klikker du på samme objekt igjen, flyttes etiketten.
+// v1.1.1: nøkkel er objektet (modelId|id), ikke postnavnet – samme post brukt flere steder får egne etiketter.
 let pickMode = false;
-const pickLabels = new Map(); // Product name -> markup-id
+const pickLabels = new Map(); // "modelId|id" -> markup-id
 let pickWaitTimer = null;
 
 function setPickMode(on) {
@@ -838,9 +839,10 @@ async function onPicked(args) {
     const cand = [1, 1000].map((k) => ({ x: p.pos.x * k, y: p.pos.y * k, z: p.pos.z * k }));
     const s = box ? cand.reduce((a, b) => (boxDist(b, box) < boxDist(a, box) ? b : a)) : cand[1];
 
-    // Samme post klikket før: flytt etiketten
-    if (pickLabels.has(name)) {
-      const old = pickLabels.get(name);
+    // Samme objekt klikket før: flytt etiketten
+    const pk = p.modelId + "|" + p.id;
+    if (pickLabels.has(pk)) {
+      const old = pickLabels.get(pk);
       try { await api.markup.removeMarkups([old]); } catch (_) { /* allerede borte */ }
       labelIds = labelIds.filter((x) => x !== old);
     }
@@ -857,7 +859,7 @@ async function onPicked(args) {
       end: { positionX: s.x + up.x * h + right.x * side, positionY: s.y + up.y * h + right.y * side, positionZ: s.z + up.z * h + right.z * side },
     }]);
     const id = added && added[0] && added[0].id;
-    if (id != null) { labelIds.push(id); pickLabels.set(name, id); }
+    if (id != null) { labelIds.push(id); pickLabels.set(pk, id); }
     labelTexts.add(name);
     setLabelInfo("labels.pickAdded", { name });
   } catch (err) {
