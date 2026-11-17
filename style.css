@@ -40,6 +40,7 @@ button {
   background: #fff; color: var(--blue); font-weight: 600; cursor: pointer;
 }
 button.small { width: auto; padding: 3px 8px; font-size: 12px; }
+button.on { background: #ee7f2d; border-color: #ee7f2d; color: #fff; } /* klikk-modus aktiv */
 button:disabled, input:disabled + .slider { opacity: .5; cursor: default; }
 details { margin-top: 10px; }
 summary { cursor: pointer; color: var(--blue); }

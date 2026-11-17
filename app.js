@@ -49,7 +49,7 @@ const BATCH = 500;
 const el = (id) => document.getElementById(id);
 const ui = {
   toggle: el("toggleLm"), selectLm: el("selectLm"), infoBtn: el("infoBtn"), infoBox: el("infoBox"),
-  stampLabels: el("stampLabels"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelMin: el("labelMin"), labelMax: el("labelMax"),
+  stampLabels: el("stampLabels"), stampPick: el("stampPick"), clearLabels: el("clearLabels"), labelInfo: el("labelInfo"), labelMin: el("labelMin"), labelMax: el("labelMax"),
   lmCount: el("lmCount"), groups: el("groups"), setHint: el("setHint"),
   resetColors: el("resetColors"), rescan: el("rescan"), status: el("status"),
   lmProps: el("lmProps"), lmValue: el("lmValue"), delProps: el("delProps"), posProps: el("posProps"),
@@ -212,6 +212,7 @@ async function scan() {
     items = found;
     itemIndex = new Map(items.map((o) => [o.modelId + "|" + o.id, o]));
     ui.stampLabels.disabled = false;
+    ui.stampPick.disabled = false;
     ui.clearLabels.disabled = false;
     const lm = lmItems();
     setLm("lm.count", { n: lm.length, total });
@@ -519,18 +520,57 @@ function rotate(q, v) {
   return { x: v.x + 2 * (w * cx + dx), y: v.y + 2 * (w * cy + dy), z: v.z + 2 * (w * cz + dz) };
 }
 
-// Kameraets "høyre" og "opp" (enhetsvektorer i modellkoordinater).
+// Kameraets "høyre", "opp" og blikkretning (enhetsvektorer i modellkoordinater).
 async function cameraAxes() {
-  let right = { x: 1, y: 0, z: 0 }, up = { x: 0, y: 0, z: 1 };
+  let right = { x: 1, y: 0, z: 0 }, up = { x: 0, y: 0, z: 1 }, fwd = { x: 0, y: 0, z: -1 };
   try {
     const cam = await api.viewer.getCamera();
     if (cam && cam.quaternion) {
       right = rotate(cam.quaternion, { x: 1, y: 0, z: 0 });
       up = rotate(cam.quaternion, { x: 0, y: 1, z: 0 });
+      fwd = rotate(cam.quaternion, { x: 0, y: 0, z: -1 }); // kameraet ser langs sin egen -Z
     }
   } catch (_) { /* bruk standard */ }
   const n = (v) => { const l = Math.hypot(v.x, v.y, v.z) || 1; return { x: v.x / l, y: v.y / l, z: v.z / l }; };
-  return { right: n(right), up: n(up) };
+  return { right: n(right), up: n(up), fwd: n(fwd) };
+}
+
+// Mørkere variant av fargen gir bedre kontrast mot lys bakgrunn
+const darken = (c, f = 0.7) => ({ r: Math.round(c.r * f), g: Math.round(c.g * f), b: Math.round(c.b * f), a: 255 });
+
+// Omsluttende boks for ett objekt i mm: { x,y,z (midt), min, max } eller null
+async function boxOf(modelId, id) {
+  try {
+    const [b] = (await api.viewer.getObjectBoundingBoxes(modelId, [id])) || [];
+    const bb = b && b.boundingBox; if (!bb) return null;
+    const ext = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z);
+    const k = ext > 50 ? 1 : 1000; // samme regel som Stamp label
+    return {
+      x: (bb.min.x + bb.max.x) / 2 * k, y: (bb.min.y + bb.max.y) / 2 * k, z: (bb.min.z + bb.max.z) / 2 * k,
+      min: { x: bb.min.x * k, y: bb.min.y * k, z: bb.min.z * k },
+      max: { x: bb.max.x * k, y: bb.max.y * k, z: bb.max.z * k },
+    };
+  } catch (_) { return null; }
+}
+
+// Startpunkt på boksens kant i stedet for midten (v1.1.0).
+// Midten av boksen ligger i lufta for bøyde jern (L, U) og for poster med mange jern som ett objekt.
+// Stålet ligger alltid inntil boksens sider: punktet legges tilfeldig mellom 1/5 og 4/5 langs lengste akse,
+// og på den av boksens langsgående kanter som vender mot kameraet. Tynn akse (< 100 mm) beholdes i midten.
+function edgeAnchor(c, fwd) {
+  if (!c.min) return { x: c.x, y: c.y, z: c.z };
+  const ex = { x: c.max.x - c.min.x, y: c.max.y - c.min.y, z: c.max.z - c.min.z };
+  const [L, A, B] = ["x", "y", "z"].sort((a, b) => ex[b] - ex[a]);
+  const p = { x: c.x, y: c.y, z: c.z };
+  p[L] = c.min[L] + (0.2 + Math.random() * 0.6) * ex[L];
+  const opts = (ax) => (ex[ax] < 100 ? [c[ax]] : [c.min[ax], c.max[ax]]);
+  let best = p, bestS = -Infinity;
+  for (const a of opts(A)) for (const b of opts(B)) {
+    const q = { ...p, [A]: a, [B]: b };
+    const s = -((q.x - c.x) * fwd.x + (q.y - c.y) * fwd.y + (q.z - c.z) * fwd.z); // størst = nærmest kameraet
+    if (s > bestS) { bestS = s; best = q; }
+  }
+  return best;
 }
 
 // "#RRGGBB", "RRGGBB" eller "#RRGGBBAA" -> rgba. Ugyldig -> null.
@@ -554,6 +594,7 @@ async function clearLabels() {
   } catch (err) { console.error(err); }
   labelIds = [];
   labelTexts = new Set();
+  pickLabels.clear();
 }
 
 async function placeLabels() {
@@ -623,7 +664,7 @@ async function placeLabels() {
     }
 
     // 3) Én etikett per gruppe, på jernet nærmest gruppens midtpunkt
-    const { right, up } = await cameraAxes();
+    const { right, up, fwd } = await cameraAxes();
     let hMin = Math.max(100, Number(ui.labelMin.value) || 1500); // mm
     let hMax = Math.max(100, Number(ui.labelMax.value) || 2400);
     if (hMax < hMin) [hMin, hMax] = [hMax, hMin];
@@ -661,20 +702,11 @@ async function placeLabels() {
       } catch (_) { /* bruk standardfarge */ }
     }
 
-    // Startpunkt: tilfeldig mellom 1/5 og 4/5 langs jernets lengste retning (ikke alltid midten)
-    const anchorOf = (c) => {
-      if (!c.min) return { x: c.x, y: c.y, z: c.z };
-      const ex = { x: c.max.x - c.min.x, y: c.max.y - c.min.y, z: c.max.z - c.min.z };
-      const ax = ex.x >= ex.y && ex.x >= ex.z ? "x" : ex.y >= ex.z ? "y" : "z";
-      const tt = 0.2 + Math.random() * 0.6;
-      const p = { x: c.x, y: c.y, z: c.z };
-      p[ax] = c.min[ax] + tt * ex[ax];
-      return p;
-    };
+    // Startpunkt: på boksens kant mot kameraet, tilfeldig mellom 1/5 og 4/5 langs lengste retning
     const placed = [];
     for (const name of shown) {
       const best = chosen.get(name);
-      if (best) placed.push({ name, best, s: anchorOf(best.c) });
+      if (best) placed.push({ name, best, s: edgeAnchor(best.c, fwd) });
     }
 
     // Høyder: sorter fra venstre mot høyre i visningen og gi naboer ulike nivåer (trinn 0,2,1,3 …)
@@ -687,9 +719,6 @@ async function placeLabels() {
       const jitter = (Math.random() - 0.5) * 80; // ±40 mm, så like nivåer ikke står helt på linje
       p.h = hMin + (hMax - hMin) * (lvl / (LEVELS - 1)) + jitter;
     });
-
-    // Mørkere variant av fargen gir bedre kontrast mot lys bakgrunn
-    const darken = (c, f = 0.7) => ({ r: Math.round(c.r * f), g: Math.round(c.g * f), b: Math.round(c.b * f), a: 255 });
 
     const markups = [];
     for (const { name, best, s, h } of placed) {
@@ -719,8 +748,135 @@ async function placeLabels() {
   }
 }
 
+// ---------- etikett ved klikk (v1.1.0) ----------
+// Knappen «Stamp ved klikk» slår på klikk-modus. Hvert klikk på et jern gir én etikett,
+// festet nøyaktig i punktet du traff. Klikker du på samme post igjen, flyttes etiketten.
+let pickMode = false;
+const pickLabels = new Map(); // Product name -> markup-id
+let pickWaitTimer = null;
+
+function setPickMode(on) {
+  pickMode = on;
+  ui.stampPick.classList.toggle("on", on);
+  ui.stampPick.dataset.i18n = on ? "labels.pickStop" : "labels.pick";
+  ui.stampPick.textContent = t(ui.stampPick.dataset.i18n);
+  setLabelInfo(on ? "labels.pickHint" : "labels.hint");
+}
+
+// Henter modell, objekt og klikkpunkt fra hendelsen (tåler ulike feltnavn)
+function extractPick(data) {
+  const out = { modelId: null, id: null, pos: null };
+  const seen = new Set();
+  const isNum = (v) => v !== null && v !== "" && Number.isFinite(Number(v));
+  const walk = (o, d) => {
+    if (!o || typeof o !== "object" || d > 4 || seen.has(o)) return;
+    seen.add(o);
+    if (Array.isArray(o)) { o.forEach((x) => walk(x, d + 1)); return; }
+    if (out.modelId == null && typeof o.modelId === "string") out.modelId = o.modelId;
+    if (out.id == null && Array.isArray(o.objectRuntimeIds) && o.objectRuntimeIds.length) out.id = o.objectRuntimeIds[0];
+    for (const k of ["objectRuntimeId", "runtimeId", "objectId", "id"]) if (out.id == null && typeof o[k] === "number") out.id = o[k];
+    for (const k of ["position", "point", "pickPoint", "hitPoint", "worldPosition"]) {
+      const v = o[k];
+      if (!out.pos && v && isNum(v.x) && isNum(v.y) && isNum(v.z)) out.pos = { x: +v.x, y: +v.y, z: +v.z };
+    }
+    for (const k of Object.keys(o)) walk(o[k], d + 1);
+  };
+  walk(data, 0);
+  return out;
+}
+
+// Product name for et objekt, eller null hvis det ikke er armering
+async function productOf(modelId, id) {
+  const it = itemIndex.get(modelId + "|" + id);
+  if (it) return it.product;
+  const [op] = (await api.viewer.getObjectProperties(modelId, [id])) || [];
+  if (!op || CONCRETE.test(op.class || "")) return null;
+  let name = op.product && op.product.name;
+  if (!name) for (const ps of op.properties || []) for (const p of ps.properties || []) if (!name && normName(p.name) === "name") name = p.value;
+  return name ? String(name).replace(/:\d+$/, "") : null;
+}
+
+async function labelColor(modelId, id) {
+  const k = modelId + "|" + id;
+  if (appliedColors.has(k)) return appliedColors.get(k);
+  try {
+    const [op] = (await api.viewer.getObjectProperties(modelId, [id])) || [];
+    const c = hexToRgba(op && op.color);
+    if (c) return c;
+  } catch (_) { /* standardfarge */ }
+  return DEFAULT_LABEL_COLOR;
+}
+
+// Avstand fra punkt til boks (0 = inni)
+function boxDist(p, b) {
+  const d = (ax) => Math.max(b.min[ax] - p[ax], 0, p[ax] - b.max[ax]);
+  return Math.hypot(d("x"), d("y"), d("z"));
+}
+
+async function onPicked(args) {
+  clearTimeout(pickWaitTimer);
+  if (!pickMode || labelBusy) return;
+  const data = args && (args.data ?? args);
+  console.log("[TB Armering] onPicked", data);
+  const p = extractPick(data);
+  if (!p.pos) { setLabelInfo("labels.pickNone"); return; }
+  labelBusy = true;
+  try {
+    // Mangler objekt i hendelsen: bruk det Trimble valgte ved klikket
+    if (p.id == null || !p.modelId) {
+      await new Promise((r) => setTimeout(r, 250));
+      const sel = await api.viewer.getSelection();
+      const m = (sel || []).find((s) => s.objectRuntimeIds && s.objectRuntimeIds.length);
+      if (m) { p.modelId = p.modelId || m.modelId; if (p.id == null) p.id = m.objectRuntimeIds[0]; }
+    }
+    if (p.id == null || !p.modelId) { setLabelInfo("labels.pickNone"); return; }
+    const name = await productOf(p.modelId, p.id);
+    if (!name) { setLabelInfo("labels.pickNoRebar"); return; }
+
+    // Enhet på klikkpunktet er ikke dokumentert: velg m eller mm etter hva som treffer jernets boks
+    const box = await boxOf(p.modelId, p.id);
+    const cand = [1, 1000].map((k) => ({ x: p.pos.x * k, y: p.pos.y * k, z: p.pos.z * k }));
+    const s = box ? cand.reduce((a, b) => (boxDist(b, box) < boxDist(a, box) ? b : a)) : cand[1];
+
+    // Samme post klikket før: flytt etiketten
+    if (pickLabels.has(name)) {
+      const old = pickLabels.get(name);
+      try { await api.markup.removeMarkups([old]); } catch (_) { /* allerede borte */ }
+      labelIds = labelIds.filter((x) => x !== old);
+    }
+    const { right, up } = await cameraAxes();
+    let hMin = Math.max(100, Number(ui.labelMin.value) || 1500);
+    let hMax = Math.max(100, Number(ui.labelMax.value) || 2400);
+    if (hMax < hMin) [hMin, hMax] = [hMax, hMin];
+    const h = hMin + Math.random() * (hMax - hMin);
+    const side = h * 0.3;
+    const added = await api.markup.addTextMarkup([{
+      text: name,
+      color: darken(await labelColor(p.modelId, p.id)),
+      start: { positionX: s.x, positionY: s.y, positionZ: s.z, modelId: p.modelId, objectId: p.id },
+      end: { positionX: s.x + up.x * h + right.x * side, positionY: s.y + up.y * h + right.y * side, positionZ: s.z + up.z * h + right.z * side },
+    }]);
+    const id = added && added[0] && added[0].id;
+    if (id != null) { labelIds.push(id); pickLabels.set(name, id); }
+    labelTexts.add(name);
+    setLabelInfo("labels.pickAdded", { name });
+  } catch (err) {
+    console.error(err);
+    setStatus("err.labels", {}, true, String(err?.message || err));
+  } finally {
+    labelBusy = false;
+  }
+}
+
 // ---------- oppstart ----------
-function onEvent(event) {
+function onEvent(event, args) {
+  if (/onPicked/i.test(event)) { onPicked(args); return; }
+  // Klikk-modus: kommer utvalg uten klikkpunkt, sier vi fra
+  if (pickMode && /onSelectionChanged/i.test(event)) {
+    clearTimeout(pickWaitTimer);
+    pickWaitTimer = setTimeout(() => { if (pickMode && !labelBusy) setLabelInfo("labels.pickNoEvent"); }, 1500);
+    return;
+  }
   if (/onModel/i.test(event)) {
     items = [];
     ui.toggle.checked = false;
@@ -745,6 +901,7 @@ async function init() {
   ui.toggle.addEventListener("change", () => applyLm(ui.toggle.checked));
   ui.selectLm.addEventListener("click", () => { clearRowMarks(); select(lmItems()); });
   ui.stampLabels.addEventListener("click", placeLabels);
+  ui.stampPick.addEventListener("click", () => setPickMode(!pickMode));
   ui.clearLabels.addEventListener("click", async () => {
     await clearLabels();
     setLabelInfo("labels.removed");

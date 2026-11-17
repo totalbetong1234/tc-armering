@@ -13,6 +13,7 @@ Extension for 3D-visningen i Trimble Connect (Total Betong).
 Egenskaper som sjekkes: `109 Form`, `17 Formkode`, `Form armering`.
 
 **Etiketter (Product name)** – marker jern i modellen og trykk **Stamp label**: én etikett per Product name.
+**Stamp ved klikk** – slå på, og klikk på enkeltjern: etiketten festes nøyaktig der du klikker. Klikk samme post igjen for å flytte den. Trykk **Avslutt klikk** når du er ferdig.
 - Etiketten settes på jernet nærmest midten av gruppen; streken starter et tilfeldig sted mellom 1/5 og 4/5 av jernet, teksten løftes 1,5–2,4 m opp (og litt til høyre). Etikettene sorteres fra venstre mot høyre i visningen, og naboer får ulike høyder så de ikke dekker hverandre.
 - Teksten får en mørkere variant av jernets farge for bedre lesbarhet. (Trimble har ingen tekstboks/bakgrunn for markeringer.)
 - Etiketten får samme farge som jernet: pos.nr-farge hvis «Farge per pos.nr» er brukt, ellers modellens farge (brun som standard).
@@ -59,6 +60,7 @@ Knappene **NO / ENG / PL** øverst bytter språk på alle tekster i panelet (kna
 Data fra modellen (Product name, koder som YE1/B100, pos.nr, egenskapsnavn) oversettes ikke. Tekstene ligger i `i18n.js` – rett eller legg til språk der.
 
 ## Versjoner
+- v1.1.0 – Etiketter festes på kanten av jernets boks (mot kameraet) i stedet for i midten, så de bommer sjeldnere på bøyde jern og poster med mange jern. Ny knapp «Stamp ved klikk» for nøyaktig plassering.
 - v1.0.0 – språkvalg NO / ENG / PL (ny fil `i18n.js`).
 - v0.9.0 – etiketter spres: trinnvise høyder (standard 1,5–2,4 m, naboer får ulike nivåer), startpunkt tilfeldig mellom 1/5 og 4/5 av jernet, mørkere tekstfarge for bedre kontrast.
 - v0.8.0 – flervalg i Product name-listen (Ctrl/Shift), valgte rader markeres.
