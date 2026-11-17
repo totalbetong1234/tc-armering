@@ -60,6 +60,7 @@ Knappene **NO / ENG / PL** øverst bytter språk på alle tekster i panelet (kna
 Data fra modellen (Product name, koder som YE1/B100, pos.nr, egenskapsnavn) oversettes ikke. Tekstene ligger i `i18n.js` – rett eller legg til språk der.
 
 ## Versjoner
+- v1.3.0 – Product name-listen sorteres på posisjonskoden i navnet (f.eks. V526): bokstaver først (B før V, ikke blandet), så tallet stigende. Poster uten kode kommer sist.
 - v1.2.0 – Stamp label festes i midtpunktet på jernet nærmest postens midte (ikke tilfeldig, ikke på boksens kant). Teksten står 2,5 m ut, 45° opp mot høyre (justerbar under Innstillinger). Gjelder også «Stamp ved klikk». Høydenivåene (laveste/høyeste) er fjernet.
 - v1.1.1 – «Stamp ved klikk»: én etikett per jern/objekt i stedet for per postnavn. Samme post brukt flere steder (f.eks. begge retninger) beholder alle etikettene.
 - v1.1.0 – Etiketter festes på kanten av jernets boks (mot kameraet) i stedet for i midten, så de bommer sjeldnere på bøyde jern og poster med mange jern. Ny knapp «Stamp ved klikk» for nøyaktig plassering.

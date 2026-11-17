@@ -120,6 +120,25 @@ const list = (s) => s.split(",").map(normName).filter(Boolean);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const natural = (a, b) => String(a).localeCompare(String(b), "no", { numeric: true });
 
+// Posisjonskode fra Product name, f.eks. «4ø20c150-V526, H…» -> { letters: "V", num: 526 }. Ingen kode -> null.
+function posCode(name) {
+  const m = /-\s*([A-Za-zÆØÅæøå]+)\s*(\d+)/.exec(String(name || ""));
+  return m ? { letters: m[1].toUpperCase(), num: Number(m[2]) } : null;
+}
+// Sortering på posisjonskode: bokstaver først (B før V – ikke blandet), så tallet stigende.
+// Poster uten kode kommer sist.
+function byPosCode(a, b) {
+  const ca = posCode(a), cb = posCode(b);
+  if (ca && !cb) return -1;
+  if (!ca && cb) return 1;
+  if (ca && cb) {
+    const l = ca.letters.localeCompare(cb.letters, "no");
+    if (l) return l;
+    if (ca.num !== cb.num) return ca.num - cb.num;
+  }
+  return natural(a, b);
+}
+
 // Første ikke-tomme verdi blant kandidatnavnene ("--" regnes som tom).
 function pick(flat, names) {
   for (const n of names) {
@@ -359,7 +378,7 @@ function buildContent(d, objs, withList) {
   const plist = document.createElement("div");
   plist.className = "plist";
   const rows = []; // rader i denne listen (for Shift-utvalg)
-  for (const name of withList ? [...byProduct.keys()].sort(natural) : []) {
+  for (const name of withList ? [...byProduct.keys()].sort(byPosCode) : []) {
     const po = byProduct.get(name);
     const poss = [...new Set(po.map((o) => o.pos))].sort(natural);
     const row = document.createElement("div");
